@@ -1,0 +1,162 @@
+"use client"
+
+import { useEffect, useState } from "react"
+import { createClient } from "@/lib/client"
+import { usePathname, useRouter } from "next/navigation"
+import { Loader2, MessageCircle } from "lucide-react"
+
+type Match = {
+  id: string
+  other_user: {
+    id: string
+    real_name: string
+    avatar_url: string | null
+  }
+  last_message: string | null
+  last_message_at: string | null
+}
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return "just now"
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  const days = Math.floor(hrs / 24)
+  return `${days}d ago`
+}
+
+export function ChatSidebar() {
+  const [matches, setMatches] = useState<Match[]>([])
+  const [loading, setLoading] = useState(true)
+  const pathname = usePathname()
+  const router = useRouter()
+  const supabase = createClient()
+
+  useEffect(() => {
+    fetchMatches()
+
+    // Subscribe to new messages to update last message preview
+    const channel = supabase
+      .channel("chat-sidebar-messages")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, () => {
+        fetchMatches()
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [])
+
+  const fetchMatches = async () => {
+    setLoading(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { data: matchData, error } = await supabase
+      .from("matches")
+      .select(`
+        id,
+        created_at,
+        user1:profiles!user1_id(id, real_name, avatar_url),
+        user2:profiles!user2_id(id, real_name, avatar_url)
+      `)
+      .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
+      .order("created_at", { ascending: false })
+
+    if (!error && matchData) {
+      // Fetch last message for each match
+      const enriched: Match[] = await Promise.all(
+        matchData.map(async (m: any) => {
+          const otherUser = m.user1.id === user.id ? m.user2 : m.user1
+
+          const { data: lastMsg } = await supabase
+            .from("messages")
+            .select("content, created_at")
+            .eq("match_id", m.id)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle()
+
+          return {
+            id: m.id,
+            other_user: otherUser,
+            last_message: lastMsg?.content || null,
+            last_message_at: lastMsg?.created_at || null,
+          }
+        })
+      )
+
+      // Sort by last message time
+      enriched.sort((a, b) => {
+        if (!a.last_message_at && !b.last_message_at) return 0
+        if (!a.last_message_at) return 1
+        if (!b.last_message_at) return -1
+        return new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
+      })
+
+      setMatches(enriched)
+    }
+    setLoading(false)
+  }
+
+  return (
+    <div className="w-72 border-r border-border bg-card/60 flex flex-col h-full flex-shrink-0">
+      <div className="p-4 border-b border-border">
+        <div className="flex items-center gap-2">
+          <MessageCircle className="h-5 w-5 text-primary" />
+          <h2 className="font-bold text-lg">Messages</h2>
+        </div>
+        <p className="text-xs text-muted-foreground mt-0.5">{matches.length} active match{matches.length !== 1 ? "es" : ""}</p>
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        {loading ? (
+          <div className="flex justify-center items-center h-24">
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          </div>
+        ) : matches.length > 0 ? (
+          <div>
+            {matches.map((match) => {
+              const isActive = pathname === `/chat/${match.id}`
+              const avatar = match.other_user.avatar_url
+                || `https://api.dicebear.com/9.x/micah/svg?seed=${match.other_user.id}&backgroundColor=ffd700`
+
+              return (
+                <button
+                  key={match.id}
+                  className={`w-full p-4 flex items-center gap-3 transition-all text-left border-b border-border/50 hover:bg-muted/40 ${
+                    isActive ? "bg-primary/10 border-l-2 border-l-primary" : "border-l-2 border-l-transparent"
+                  }`}
+                  onClick={() => router.push(`/chat/${match.id}`)}
+                >
+                  <div className="h-11 w-11 rounded-full overflow-hidden border border-border bg-muted flex-shrink-0">
+                    <img src={avatar} alt={match.other_user.real_name} className="w-full h-full object-cover" />
+                  </div>
+                  <div className="overflow-hidden flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-1">
+                      <h3 className="font-semibold text-sm truncate">{match.other_user.real_name}</h3>
+                      {match.last_message_at && (
+                        <span className="text-xs text-muted-foreground flex-shrink-0">
+                          {timeAgo(match.last_message_at)}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate mt-0.5">
+                      {match.last_message || "Tap to start chatting ✨"}
+                    </p>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-40 text-center px-4">
+            <p className="text-sm text-muted-foreground">No matches yet.</p>
+            <p className="text-xs text-muted-foreground/70 mt-1">Swipe on Discover to connect!</p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
