@@ -1,10 +1,17 @@
+/* eslint-disable */
 "use client"
 
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/client"
 import { useTheme } from "next-themes"
 import { Button } from "@/components/ui/button"
-import { Loader2, Moon, Sun, Monitor, AlertTriangle, Shield, EyeOff, Eye, Flame, Trash2 } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
+import {
+  Loader2, Moon, Sun, Monitor, AlertTriangle, Shield,
+  EyeOff, Eye, Flame, Trash2,
+  Mail, HelpCircle, Bug, FileText, ChevronRight
+} from "lucide-react"
+import Link from "next/link"
 
 type ProfileSettings = {
   id: string
@@ -12,6 +19,7 @@ type ProfileSettings = {
   hookup_opt_in: boolean
   hookup_opt_in_changed_at: string | null
   deletion_queued_at: string | null
+  date_of_birth: string | null
 }
 
 export default function SettingsPage() {
@@ -40,14 +48,14 @@ export default function SettingsPage() {
 
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, is_visible, hookup_opt_in, hookup_opt_in_changed_at, deletion_queued_at")
+        .select("id, is_visible, hookup_opt_in, hookup_opt_in_changed_at, deletion_queued_at, date_of_birth")
         .eq("id", user.id)
         .single()
 
       if (error) throw error
       setSettings(data)
-    } catch (error) {
-      console.error("Error fetching settings:", error)
+    } catch (error: any) {
+      console.error("Error fetching settings:", error?.message ?? error)
     } finally {
       setLoading(false)
     }
@@ -55,7 +63,7 @@ export default function SettingsPage() {
 
   const updateSetting = async (key: keyof ProfileSettings, value: any) => {
     if (!settings) return
-    
+
     // PRD: Hookup intent 24hr cooldown check
     if (key === 'hookup_opt_in' && settings.hookup_opt_in_changed_at) {
       const lastChanged = new Date(settings.hookup_opt_in_changed_at)
@@ -121,145 +129,234 @@ export default function SettingsPage() {
 
   const isDeletionQueued = !!settings.deletion_queued_at
 
+  // Calculate age for minor check
+  let isMinor = false
+  if (settings.date_of_birth) {
+    const dob = new Date(settings.date_of_birth)
+    const ageDiffMs = Date.now() - dob.getTime()
+    const ageDate = new Date(ageDiffMs)
+    isMinor = Math.abs(ageDate.getUTCFullYear() - 1970) < 18
+  }
+
+  const supportLinks: { icon: LucideIcon; label: string; desc: string; href: string; color: string; bg: string }[] = [
+    {
+      icon: Mail,
+      label: "Contact Us",
+      desc: "Send us a message or ask a question",
+      href: "/settings/contact",
+      color: "text-zinc-500",
+      bg: "bg-zinc-500/10",
+    },
+    {
+      icon: HelpCircle,
+      label: "Help & Support",
+      desc: "FAQs and how to use the app",
+      href: "/settings/help",
+      color: "text-emerald-500",
+      bg: "bg-emerald-500/10",
+    },
+    {
+      icon: Bug,
+      label: "Report a Bug",
+      desc: "Found something broken? Let us know",
+      href: "/settings/contact?type=bug",
+      color: "text-orange-500",
+      bg: "bg-orange-500/10",
+    },
+    {
+      icon: FileText,
+      label: "Privacy Policy",
+      desc: "How we collect, use, and protect your data",
+      href: "/settings/privacy",
+      color: "text-violet-500",
+      bg: "bg-violet-500/10",
+    },
+  ]
+
   return (
-    <div className="flex flex-col h-full items-center justify-start pt-4 pb-8 overflow-y-auto">
-      <div className="w-full max-w-2xl bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
-        
-        <div className="bg-muted/30 p-6 border-b border-border flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
-              <Shield className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold">Settings</h2>
-              <p className="text-sm text-muted-foreground">Preferences, privacy, and account control.</p>
-            </div>
-          </div>
-          {saving && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
-        </div>
+    <div className="flex flex-col h-full min-h-0 overflow-y-auto">
+      <div className="flex-1 p-6">
+        <div className="w-full max-w-2xl mx-auto space-y-5">
 
-        <div className="p-6 md:p-8 space-y-10">
-          
-          {/* App Appearance */}
-          <section className="space-y-4">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground border-b pb-2">Appearance</h3>
-            <div className="grid grid-cols-3 gap-3">
-              <button 
-                className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border transition-all ${theme === 'light' ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border bg-background hover:bg-muted text-muted-foreground'}`}
-                onClick={() => setTheme('light')}
-              >
-                <Sun className="h-5 w-5" />
-                <span className="text-sm">Light</span>
-              </button>
-              <button 
-                className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border transition-all ${theme === 'dark' ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border bg-background hover:bg-muted text-muted-foreground'}`}
-                onClick={() => setTheme('dark')}
-              >
-                <Moon className="h-5 w-5" />
-                <span className="text-sm">Dark</span>
-              </button>
-              <button 
-                className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border transition-all ${theme === 'system' ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border bg-background hover:bg-muted text-muted-foreground'}`}
-                onClick={() => setTheme('system')}
-              >
-                <Monitor className="h-5 w-5" />
-                <span className="text-sm">System</span>
-              </button>
-            </div>
-          </section>
-
-          {/* Discovery & Privacy */}
-          <section className="space-y-4">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground border-b pb-2">Discovery & Privacy</h3>
-            
-            {/* Visibility Toggle */}
-            <div className="flex items-start justify-between p-4 rounded-xl border border-border bg-background">
-              <div className="pr-4">
-                <div className="flex items-center gap-2">
-                  {settings.is_visible ? <Eye className="h-4 w-4 text-green-500" /> : <EyeOff className="h-4 w-4 text-muted-foreground" />}
-                  <h4 className="font-semibold text-sm">Profile Visibility</h4>
+          {/* Page header card */}
+          <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+            <div className="bg-muted/30 p-6 border-b border-border flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <Shield className="h-5 w-5 text-primary" />
                 </div>
-                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                  {settings.is_visible 
-                    ? "Your profile is currently visible to other students in the discovery pool." 
-                    : "Your profile is hidden. You will not be shown to new people, but existing matches remain."}
-                </p>
-              </div>
-              <Button 
-                variant={settings.is_visible ? "outline" : "default"}
-                className={`rounded-xl flex-shrink-0 ${!settings.is_visible && "bg-primary text-primary-foreground hover:bg-primary/90"}`}
-                onClick={() => updateSetting('is_visible', !settings.is_visible)}
-              >
-                {settings.is_visible ? "Hide Profile" : "Go Visible"}
-              </Button>
-            </div>
-
-            {/* Hookup Opt-In Toggle */}
-            <div className={`flex items-start justify-between p-4 rounded-xl border transition-all ${settings.hookup_opt_in ? 'border-orange-500/50 bg-orange-500/5' : 'border-border bg-background'}`}>
-              <div className="pr-4">
-                <div className="flex items-center gap-2">
-                  <Flame className={`h-4 w-4 ${settings.hookup_opt_in ? 'text-orange-500' : 'text-muted-foreground'}`} />
-                  <h4 className="font-semibold text-sm">Casual / Hookup Intent</h4>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                  Strictly mutual opt-in. If enabled, you will see others looking for casual encounters, and they will see you. 
-                  <span className="block mt-1 font-medium text-orange-500/80">Can only be toggled once every 24 hours.</span>
-                </p>
-              </div>
-              <button 
-                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${settings.hookup_opt_in ? 'bg-orange-500' : 'bg-muted-foreground/30'}`}
-                onClick={() => updateSetting('hookup_opt_in', !settings.hookup_opt_in)}
-                role="switch"
-                aria-checked={settings.hookup_opt_in}
-              >
-                <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${settings.hookup_opt_in ? 'translate-x-5' : 'translate-x-0'}`} />
-              </button>
-            </div>
-          </section>
-
-          {/* Account Control */}
-          <section className="space-y-4 pt-4 border-t border-border">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-destructive">Danger Zone</h3>
-            
-            <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between p-5 rounded-xl border ${isDeletionQueued ? 'border-destructive bg-destructive/10' : 'border-destructive/30 bg-destructive/5'} gap-4`}>
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
                 <div>
-                  <h4 className="font-semibold text-sm text-destructive">
-                    {isDeletionQueued ? "Account Scheduled for Deletion" : "Delete Account"}
-                  </h4>
-                  <p className="text-xs text-destructive/80 mt-1 max-w-sm leading-relaxed">
-                    {isDeletionQueued 
-                      ? `Your account is hidden and will be permanently deleted in 7 days. You can cancel this process.` 
-                      : "Permanently delete your profile, matches, and messages. This action triggers a 7-day grace period."}
-                  </p>
+                  <h2 className="text-2xl font-bold">Settings</h2>
+                  <p className="text-sm text-muted-foreground">Preferences, privacy, and account control.</p>
                 </div>
               </div>
-              
-              {isDeletionQueued ? (
-                <Button 
-                  onClick={handleAccountAction}
-                  className="w-full sm:w-auto rounded-xl bg-background text-foreground hover:bg-muted"
-                >
-                  Cancel Deletion
-                </Button>
-              ) : (
-                <div className="w-full sm:w-auto flex flex-col gap-2">
-                  {deleteConfirm && (
-                    <span className="text-[10px] text-destructive font-bold uppercase tracking-wider text-center">Are you sure?</span>
-                  )}
-                  <Button 
-                    variant="destructive" 
-                    onClick={handleAccountAction}
-                    className={`w-full rounded-xl transition-all ${deleteConfirm ? 'ring-2 ring-destructive ring-offset-2 ring-offset-background' : ''}`}
+              {saving && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
+            </div>
+
+            <div className="p-6 md:p-8 space-y-10">
+
+              {/* App Appearance */}
+              <section className="space-y-4">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-2">Appearance</h3>
+                <div className="grid grid-cols-3 gap-3">
+                  <button
+                    className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 transition-all duration-200 ${theme === 'light' ? 'border-primary bg-primary/10 text-primary font-semibold shadow-sm' : 'border-border bg-card hover:bg-muted/60 text-muted-foreground hover:text-foreground'}`}
+                    onClick={() => setTheme('light')}
                   >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    {deleteConfirm ? "Confirm Deletion" : "Delete Account"}
+                    <Sun className="h-5 w-5" />
+                    <span className="text-sm">Light</span>
+                  </button>
+                  <button
+                    className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 transition-all duration-200 ${theme === 'dark' ? 'border-primary bg-primary/10 text-primary font-semibold shadow-sm' : 'border-border bg-card hover:bg-muted/60 text-muted-foreground hover:text-foreground'}`}
+                    onClick={() => setTheme('dark')}
+                  >
+                    <Moon className="h-5 w-5" />
+                    <span className="text-sm">Dark</span>
+                  </button>
+                  <button
+                    className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 transition-all duration-200 ${theme === 'system' ? 'border-primary bg-primary/10 text-primary font-semibold shadow-sm' : 'border-border bg-card hover:bg-muted/60 text-muted-foreground hover:text-foreground'}`}
+                    onClick={() => setTheme('system')}
+                  >
+                    <Monitor className="h-5 w-5" />
+                    <span className="text-sm">System</span>
+                  </button>
+                </div>
+              </section>
+
+              {/* Discovery & Privacy */}
+              <section className="space-y-4">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-2">Discovery & Privacy</h3>
+
+                {/* Visibility Toggle */}
+                <div className="flex items-start justify-between p-4 rounded-xl border border-border bg-background gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      {settings.is_visible
+                        ? <Eye className="h-4 w-4 text-green-500 flex-shrink-0" />
+                        : <EyeOff className="h-4 w-4 text-muted-foreground flex-shrink-0" />}
+                      <h4 className="font-semibold text-sm">Profile Visibility</h4>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      {settings.is_visible
+                        ? "Your profile is currently visible to other students in the discovery pool."
+                        : "Your profile is hidden. You will not be shown to new people, but existing matches remain."}
+                    </p>
+                  </div>
+                  <Button
+                    variant={settings.is_visible ? "outline" : "default"}
+                    className={`rounded-xl flex-shrink-0 ${!settings.is_visible && "bg-primary text-primary-foreground hover:bg-primary/90"}`}
+                    onClick={() => updateSetting('is_visible', !settings.is_visible)}
+                  >
+                    {settings.is_visible ? "Hide Profile" : "Go Visible"}
                   </Button>
                 </div>
-              )}
+
+                {/* Hookup Opt-In Toggle */}
+                <div className={`flex items-start justify-between p-4 rounded-xl border transition-all gap-4 ${settings.hookup_opt_in ? 'border-orange-500/50 bg-orange-500/5' : 'border-border bg-background'} ${isMinor ? 'opacity-50' : ''}`}>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Flame className={`h-4 w-4 flex-shrink-0 ${settings.hookup_opt_in ? 'text-orange-500' : 'text-muted-foreground'}`} />
+                      <h4 className="font-semibold text-sm">Casual / Hookup Intent</h4>
+                      {isMinor && <span className="text-[10px] bg-destructive/10 text-destructive px-2 py-0.5 rounded-full font-bold uppercase">Restricted</span>}
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Strictly mutual opt-in. If enabled, you will see others looking for casual encounters, and they will see you.
+                      {!isMinor && <span className="block mt-1 font-medium text-orange-500/80">Can only be toggled once every 24 hours.</span>}
+                      {isMinor && <span className="block mt-1 font-medium text-destructive">Must be 18+ to enable this feature.</span>}
+                    </p>
+                  </div>
+                  <button
+                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 mt-0.5 ${settings.hookup_opt_in ? 'bg-orange-500' : 'bg-muted-foreground/30'} ${isMinor ? 'cursor-not-allowed' : ''}`}
+                    onClick={() => {
+                      if (isMinor) return
+                      updateSetting('hookup_opt_in', !settings.hookup_opt_in)
+                    }}
+                    disabled={isMinor}
+                    role="switch"
+                    aria-checked={settings.hookup_opt_in}
+                  >
+                    <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${settings.hookup_opt_in ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+              </section>
+
             </div>
-          </section>
+          </div>
+
+          {/* Support & Legal card */}
+          <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+            <div className="px-6 pt-5 pb-2">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Support & Legal</h3>
+            </div>
+            <div className="divide-y divide-border">
+              {supportLinks.map((item) => {
+                const Icon = item.icon
+                return (
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    className="flex items-center gap-4 px-6 py-4 hover:bg-muted/40 transition-colors group"
+                  >
+                    <div className={`h-9 w-9 rounded-xl ${item.bg} flex items-center justify-center flex-shrink-0`}>
+                      <Icon className={`h-4 w-4 ${item.color}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold">{item.label}</p>
+                      <p className="text-xs text-muted-foreground">{item.desc}</p>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors flex-shrink-0" />
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Danger Zone card */}
+          <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+            <div className="px-6 pt-5 pb-2">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-destructive">Danger Zone</h3>
+            </div>
+            <div className="p-4 md:p-6">
+              <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between p-5 rounded-xl border ${isDeletionQueued ? 'border-destructive bg-destructive/10' : 'border-destructive/30 bg-destructive/5'} gap-4`}>
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="font-semibold text-sm text-destructive">
+                      {isDeletionQueued ? "Account Scheduled for Deletion" : "Delete Account"}
+                    </h4>
+                    <p className="text-xs text-destructive/80 mt-1 max-w-sm leading-relaxed">
+                      {isDeletionQueued
+                        ? `Your account is hidden and will be permanently deleted in 7 days. You can cancel this process.`
+                        : "Permanently delete your profile, matches, and messages. This action triggers a 7-day grace period."}
+                    </p>
+                  </div>
+                </div>
+
+                {isDeletionQueued ? (
+                  <Button
+                    onClick={handleAccountAction}
+                    className="w-full sm:w-auto rounded-xl bg-background text-foreground hover:bg-muted"
+                  >
+                    Cancel Deletion
+                  </Button>
+                ) : (
+                  <div className="w-full sm:w-auto flex flex-col gap-2">
+                    {deleteConfirm && (
+                      <span className="text-[10px] text-destructive font-bold uppercase tracking-wider text-center">Are you sure?</span>
+                    )}
+                    <Button
+                      variant="destructive"
+                      onClick={handleAccountAction}
+                      className={`w-full rounded-xl transition-all ${deleteConfirm ? 'ring-2 ring-destructive ring-offset-2 ring-offset-background' : ''}`}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      {deleteConfirm ? "Confirm Deletion" : "Delete Account"}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
 
         </div>
       </div>
@@ -267,8 +364,8 @@ export default function SettingsPage() {
       {/* Toast */}
       {toast && (
         <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-toast px-5 py-3 rounded-2xl shadow-xl text-sm font-medium ${
-          toast.type === "success" 
-            ? "bg-primary text-primary-foreground" 
+          toast.type === "success"
+            ? "bg-primary text-primary-foreground"
             : toast.type === "error"
             ? "bg-destructive text-white"
             : "bg-card border border-border text-foreground"

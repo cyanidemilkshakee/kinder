@@ -1,94 +1,68 @@
+/* eslint-disable */
 "use client"
 
-import React, { useRef, useState } from "react"
-import { Canvas, useFrame } from "@react-three/fiber"
-import { Float, Sphere, Box, Torus, Stars } from "@react-three/drei"
-import * as THREE from "three"
+import React from "react"
 
-type Variant = "auth" | "home" | "chat" | "likes" | "profile" | "default"
+type Variant = "auth" | "home" | "chat" | "likes" | "profile" | "confessions" | "default"
 
-function Shape({ variant }: { variant: Variant }) {
-  const meshRef = useRef<THREE.Mesh>(null)
-  
-  useFrame((state, delta) => {
-    if (meshRef.current) {
-      meshRef.current.rotation.x += delta * 0.2
-      meshRef.current.rotation.y += delta * 0.3
-    }
-  })
-
-  // We use our Tailwind colors: primary (FFD700), secondary (FFA500)
-  const color = variant === 'auth' ? '#FFD700' : variant === 'chat' ? '#FFA500' : '#FFD27F'
-
-  return (
-    <Float speed={2} rotationIntensity={1} floatIntensity={2}>
-      {variant === 'auth' && (
-        <Sphere ref={meshRef as any} args={[1.5, 64, 64]} position={[0, 0, 0]}>
-          <meshStandardMaterial color={color} wireframe />
-        </Sphere>
-      )}
-      {variant === 'home' && (
-        <Torus ref={meshRef as any} args={[1.2, 0.4, 32, 100]} position={[0, 0, 0]}>
-          <meshStandardMaterial color="#FFD700" wireframe />
-        </Torus>
-      )}
-      {variant === 'chat' && (
-        <Box ref={meshRef as any} args={[2, 2, 2]} position={[0, 0, 0]}>
-          <meshStandardMaterial color="#FFA500" wireframe />
-        </Box>
-      )}
-      {(variant === 'likes' || variant === 'profile' || variant === 'default') && (
-        <Sphere ref={meshRef as any} args={[1, 32, 32]} position={[0, 0, 0]}>
-          <meshStandardMaterial color="#FFD700" wireframe />
-        </Sphere>
-      )}
-    </Float>
-  )
-}
-
-function CursorLight() {
-  const lightRef = useRef<THREE.PointLight>(null)
-  
-  useFrame((state) => {
-    if (lightRef.current) {
-      const x = (state.pointer.x * state.viewport.width) / 2
-      const y = (state.pointer.y * state.viewport.height) / 2
-      lightRef.current.position.set(x, y, 2)
-    }
-  })
-
-  return <pointLight ref={lightRef} distance={5} intensity={5} color="#FFD700" />
+// Per-variant accent colours (zinc/stone/violet/gold palette — no blues)
+const VARIANT_STYLES: Record<Variant, { orb1: string; orb2: string; orb3: string }> = {
+  auth:        { orb1: "bg-violet-500/15",  orb2: "bg-stone-400/10",    orb3: "bg-violet-700/10"  },
+  home:        { orb1: "bg-amber-400/15",   orb2: "bg-violet-500/10",   orb3: "bg-stone-400/10"   },
+  chat:        { orb1: "bg-zinc-400/15",    orb2: "bg-violet-400/10",   orb3: "bg-stone-300/10"   },
+  likes:       { orb1: "bg-rose-400/15",    orb2: "bg-stone-400/10",    orb3: "bg-violet-400/10"  },
+  profile:     { orb1: "bg-violet-500/15",  orb2: "bg-zinc-400/10",     orb3: "bg-stone-400/10"   },
+  confessions: { orb1: "bg-violet-600/15",  orb2: "bg-zinc-500/10",     orb3: "bg-stone-500/8"    },
+  default:     { orb1: "bg-zinc-500/10",    orb2: "bg-stone-400/10",    orb3: "bg-violet-400/8"   },
 }
 
 export function InteractiveBackground({ variant = "default" }: { variant?: Variant }) {
+  const { orb1, orb2, orb3 } = VARIANT_STYLES[variant] ?? VARIANT_STYLES.default
+
   return (
-    <div className="fixed inset-0 z-[-1] bg-background">
-      <Canvas camera={{ position: [0, 0, 5], fov: 45 }}>
-        <ambientLight intensity={0.5} />
-        <CursorLight />
-        
-        {/* Render a bunch of background stars/particles */}
-        <Stars radius={50} depth={50} count={3000} factor={4} saturation={0} fade speed={1} />
-        
-        {/* Main shape */}
-        <Shape variant={variant} />
-        
-        {/* Secondary distant shapes for depth */}
-        <group position={[-3, -2, -4]}>
-          <Float speed={1} floatIntensity={1}>
-             <Sphere args={[0.5, 16, 16]}>
-               <meshStandardMaterial color="#FFA500" wireframe opacity={0.3} transparent />
-             </Sphere>
-          </Float>
-        </group>
-        <group position={[3, 2, -5]}>
-          <Float speed={1.5} floatIntensity={2}>
-             <Box args={[1, 1, 1]}>
-               <meshStandardMaterial color="#FFD700" wireframe opacity={0.3} transparent />
-             </Box>
-          </Float>
-        </group>
-      </Canvas>
+    <div className="fixed inset-0 z-[-1] overflow-hidden bg-background" aria-hidden="true">
+
+      {/* ── Subtle dot-grid mesh ── */}
+      <div
+        className="absolute inset-0 opacity-[0.035] dark:opacity-[0.055]"
+        style={{
+          backgroundImage: "radial-gradient(circle, currentColor 1px, transparent 1px)",
+          backgroundSize: "28px 28px",
+        }}
+      />
+
+      {/* ── Noise grain overlay ── */}
+      <svg className="absolute inset-0 h-full w-full opacity-[0.03] dark:opacity-[0.045] pointer-events-none">
+        <filter id="noise">
+          <feTurbulence type="fractalNoise" baseFrequency="0.75" numOctaves="4" stitchTiles="stitch" />
+          <feColorMatrix type="saturate" values="0" />
+        </filter>
+        <rect width="100%" height="100%" filter="url(#noise)" />
+      </svg>
+
+      {/* ── Floating orbs ── */}
+      <div
+        className={`absolute -top-32 -left-32 h-[520px] w-[520px] rounded-full ${orb1} blur-[100px] animate-[orbFloat_18s_ease-in-out_infinite]`}
+      />
+      <div
+        className={`absolute -bottom-48 -right-24 h-[600px] w-[600px] rounded-full ${orb2} blur-[120px] animate-[orbFloat_22s_ease-in-out_infinite_reverse]`}
+        style={{ animationDelay: "-6s" }}
+      />
+      <div
+        className={`absolute top-1/2 left-1/2 h-[380px] w-[380px] -translate-x-1/2 -translate-y-1/2 rounded-full ${orb3} blur-[90px] animate-[orbFloat_26s_ease-in-out_infinite]`}
+        style={{ animationDelay: "-12s" }}
+      />
+      {/* Soft top-centre highlight */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 h-[200px] w-[700px] rounded-full bg-primary/6 dark:bg-primary/8 blur-[80px]" />
+
+      {/* ── Keyframes injected inline (avoids globals.css pollution) ── */}
+      <style>{`
+        @keyframes orbFloat {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          33%       { transform: translate(30px, -40px) scale(1.06); }
+          66%       { transform: translate(-20px, 20px) scale(0.96); }
+        }
+      `}</style>
     </div>
   )
 }

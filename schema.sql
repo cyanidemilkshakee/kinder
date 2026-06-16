@@ -14,6 +14,8 @@ create table public.profiles (
   bio text,
   relationship_intent text not null,
   hookup_opt_in boolean default false,
+  hookup_opt_in_changed_at timestamp with time zone,
+  date_of_birth date,
   is_visible boolean default true,
   deletion_queued_at timestamp with time zone,
   avatar_url text,

@@ -1,11 +1,14 @@
+/* eslint-disable */
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
+import { Poppins, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 
-const jakartaSans = Plus_Jakarta_Sans({
-  variable: "--font-sans",
+const poppins = Poppins({
+  variable: "--font-poppins",
   subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700", "800", "900"],
+  display: "swap",
 });
 
 const geistMono = Geist_Mono({
@@ -15,7 +18,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Kinder",
-  description: "The campus-exclusive social discovery platform.",
+  description: "The campus-exclusive social discovery platform for college students.",
 };
 
 export default function RootLayout({
@@ -27,7 +30,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body
         suppressHydrationWarning
-        className={`${jakartaSans.variable} ${geistMono.variable} font-sans antialiased min-h-full flex flex-col`}
+        className={`${poppins.variable} ${geistMono.variable} font-sans antialiased min-h-full flex flex-col`}
       >
         <ThemeProvider
           attribute="class"

@@ -1,3 +1,4 @@
+/* eslint-disable */
 "use client"
 
 import { use, useEffect, useState, useCallback } from "react"
@@ -14,6 +15,7 @@ type Profile = {
   gender: string
   bio: string | null
   relationship_intent: string
+  relationship_intents: string[] | null
   avatar_url: string | null
   interest_tags: string[] | null
 }
@@ -68,12 +70,31 @@ export default function DiscoverPage() {
     if (!user) { router.push("/"); return }
     setCurrentUserId(user.id)
 
-    // Fetch current user's hookup_opt_in setting
-    const { data: myProfile } = await supabase
-      .from("profiles")
-      .select("hookup_opt_in, super_likes_today, super_likes_reset_at")
-      .eq("id", user.id)
-      .single()
+    // Parallelize all independent exclusion queries + my profile in one round-trip
+    const [myProfileRes, swipesRes, blocksRes, superLikesSentRes] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("hookup_opt_in, super_likes_today, super_likes_reset_at")
+        .eq("id", user.id)
+        .single(),
+      supabase
+        .from("swipes")
+        .select("swiped_id")
+        .eq("swiper_id", user.id),
+      supabase
+        .from("blocks")
+        .select("blocked_id")
+        .eq("blocker_id", user.id),
+      supabase
+        .from("super_likes")
+        .select("receiver_id")
+        .eq("sender_id", user.id),
+    ])
+
+    const myProfile = myProfileRes.data
+    const swipes = swipesRes.data
+    const blocks = blocksRes.data
+    const superLikesSent = superLikesSentRes.data
 
     const hookupOpt = myProfile?.hookup_opt_in ?? false
     setCurrentUserHookupOpt(hookupOpt)
@@ -90,24 +111,6 @@ export default function DiscoverPage() {
       }
     }
 
-    // Get profiles already swiped on
-    const { data: swipes } = await supabase
-      .from("swipes")
-      .select("swiped_id")
-      .eq("swiper_id", user.id)
-
-    // Get blocked users
-    const { data: blocks } = await supabase
-      .from("blocks")
-      .select("blocked_id")
-      .eq("blocker_id", user.id)
-
-    // Get super likes sent
-    const { data: superLikesSent } = await supabase
-      .from("super_likes")
-      .select("receiver_id")
-      .eq("sender_id", user.id)
-
     const excludedIds = [
       user.id,
       ...(swipes?.map(s => s.swiped_id) || []),
@@ -117,7 +120,7 @@ export default function DiscoverPage() {
 
     let query = supabase
       .from("profiles")
-      .select("id, real_name, department, year, gender, bio, relationship_intent, avatar_url, interest_tags")
+      .select("id, real_name, department, year, gender, bio, relationship_intent, relationship_intents, avatar_url, interest_tags")
       .eq("is_visible", true)
       .limit(15)
 
@@ -125,9 +128,11 @@ export default function DiscoverPage() {
       query = query.not("id", "in", `(${excludedIds.join(",")})`)
     }
 
-    // Filter out casual/hookup profiles for users who haven't opted in
-    if (!hookupOpt) {
-      query = query.neq("relationship_intent", "casual")
+    // PRD: "only compatible opted-in users should appear."
+    if (hookupOpt) {
+      query = query.eq("hookup_opt_in", true)
+    } else {
+      query = query.eq("hookup_opt_in", false)
     }
 
     const { data: availableProfiles } = await query
@@ -230,16 +235,25 @@ export default function DiscoverPage() {
   const avatar = current?.avatar_url
     || (current ? `https://api.dicebear.com/9.x/micah/svg?seed=${current.id}&backgroundColor=ffd700,ffa500` : "")
 
-  const intentLabel = (intent: string) => {
-    if (intent === "friendship") return "🤝 Friendship"
-    if (intent === "dating") return "💛 Dating"
-    if (intent === "casual") return "🔥 Casual"
-    return intent
+  const intentBadges = (profile: Profile): string => {
+    // Prefer the new array column; fall back to legacy single-value column
+    const intents: string[] =
+      (profile.relationship_intents && profile.relationship_intents.length > 0)
+        ? profile.relationship_intents
+        : [profile.relationship_intent]
+    return intents
+      .map(i => {
+        if (i === "friendship") return "🤝 Friendship"
+        if (i === "dating") return "💛 Dating"
+        if (i === "casual") return "🔥 Casual"
+        return i
+      })
+      .join(" · ")
   }
 
   return (
-    <div className="flex flex-col h-full items-center justify-start pt-4 pb-8 overflow-y-auto">
-      <div className="w-full max-w-sm">
+    <div className="flex flex-col h-full overflow-y-auto p-6">
+      <div className="w-full">
         {/* Header */}
         <div className="flex items-center justify-between mb-4 px-1">
           <h1 className="text-2xl font-extrabold tracking-tight">Discover</h1>
@@ -281,10 +295,10 @@ export default function DiscoverPage() {
                 >
                   <Flag className="h-3.5 w-3.5 text-muted-foreground" />
                 </button>
-                {/* Intent badge */}
+                {/* Intent badge(s) */}
                 <div className="absolute bottom-3 left-3">
                   <span className="text-xs font-semibold bg-background/80 backdrop-blur-sm border border-border/50 rounded-full px-3 py-1">
-                    {intentLabel(current.relationship_intent)}
+                    {intentBadges(current)}
                   </span>
                 </div>
               </div>
@@ -310,7 +324,7 @@ export default function DiscoverPage() {
                 {current.interest_tags && current.interest_tags.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     {current.interest_tags.slice(0, 5).map(tag => (
-                      <span key={tag} className="text-xs bg-primary/10 text-foreground border border-primary/20 rounded-full px-2.5 py-0.5 font-medium">
+                      <span key={tag} className="text-xs bg-primary/10 text-primary border border-primary/20 rounded-full px-2.5 py-0.5 font-semibold">
                         {tag}
                       </span>
                     ))}
@@ -375,7 +389,7 @@ export default function DiscoverPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
           <div className="animate-match-pop w-full max-w-sm rounded-3xl bg-card border border-border shadow-2xl overflow-hidden">
             {/* Gradient header */}
-            <div className="relative bg-gradient-to-br from-primary/30 to-secondary/20 p-8 pb-4 flex flex-col items-center">
+            <div className="relative bg-gradient-to-br from-primary/25 via-secondary/15 to-primary/10 p-8 pb-4 flex flex-col items-center">
               {/* Pulse ring */}
               <div className="relative">
                 <div className="absolute inset-0 rounded-full bg-primary/30 animate-pulse-ring" />

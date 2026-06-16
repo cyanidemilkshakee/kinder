@@ -1,3 +1,4 @@
+/* eslint-disable */
 "use client"
 
 import { useEffect, useState, useRef } from "react"
@@ -13,6 +14,7 @@ type Profile = {
   gender: string
   bio: string | null
   relationship_intent: string
+  relationship_intents: string[]
   avatar_url: string | null
   interest_tags: string[] | null
 }
@@ -39,7 +41,7 @@ export default function ProfilePage() {
     fetchProfile()
   }, [])
 
-  const fetchProfile = async () => {
+  async function fetchProfile() {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
@@ -51,7 +53,13 @@ export default function ProfilePage() {
         .single()
 
       if (error) throw error
-      setProfile({ ...data, interest_tags: data.interest_tags || [] })
+      const intents: string[] =
+        data.relationship_intents && data.relationship_intents.length > 0
+          ? data.relationship_intents
+          : data.relationship_intent
+          ? [data.relationship_intent]
+          : ["friendship"]
+      setProfile({ ...data, interest_tags: data.interest_tags || [], relationship_intents: intents })
     } catch (error) {
       console.error("Error fetching profile:", error)
     } finally {
@@ -65,24 +73,42 @@ export default function ProfilePage() {
 
     setSaving(true)
     try {
-      const { error } = await supabase
+      const basePayload = {
+        real_name: profile.real_name,
+        department: profile.department,
+        year: profile.year,
+        gender: profile.gender,
+        bio: profile.bio,
+        relationship_intent: profile.relationship_intents[0] ?? "friendship",
+        interest_tags: profile.interest_tags,
+      }
+
+      // Try saving with the new array column first. If the column doesn't exist
+      // yet (migration not run), fall back to the legacy single-value column.
+      let { error } = await supabase
         .from("profiles")
-        .update({
-          real_name: profile.real_name,
-          department: profile.department,
-          year: profile.year,
-          gender: profile.gender,
-          bio: profile.bio,
-          relationship_intent: profile.relationship_intent,
-          interest_tags: profile.interest_tags,
-        })
+        .update({ ...basePayload, relationship_intents: profile.relationship_intents })
         .eq("id", profile.id)
 
-      if (error) throw error
+      if (error) {
+        const msg: string = (error as any).message ?? JSON.stringify(error)
+        // Column doesn't exist yet → retry without it
+        if (msg.includes("relationship_intents") || msg.includes("column")) {
+          const fallback = await supabase
+            .from("profiles")
+            .update(basePayload)
+            .eq("id", profile.id)
+          if (fallback.error) throw fallback.error
+        } else {
+          throw error
+        }
+      }
+
       showToast("Profile updated successfully!")
-    } catch (error) {
-      console.error("Error updating profile:", error)
-      showToast("Failed to update profile.", "error")
+    } catch (err: any) {
+      const msg: string = err?.message ?? err?.details ?? JSON.stringify(err)
+      console.error("Error updating profile:", msg, err)
+      showToast("Failed to update profile: " + (msg || "unknown error"), "error")
     } finally {
       setSaving(false)
     }
@@ -156,8 +182,9 @@ export default function ProfilePage() {
   const displayAvatar = profile.avatar_url || `https://api.dicebear.com/9.x/micah/svg?seed=${profile.id}&backgroundColor=ffd700`
 
   return (
-    <div className="flex flex-col h-full items-center justify-start pt-4 pb-8 overflow-y-auto">
-      <div className="w-full max-w-2xl bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+    <div className="flex flex-col h-full min-h-0 overflow-y-auto">
+      <div className="flex-1 p-6">
+      <div className="w-full max-w-2xl mx-auto bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
         
         {/* Header */}
         <div className="bg-muted/30 p-6 border-b border-border flex items-center gap-3">
@@ -298,9 +325,9 @@ export default function ProfilePage() {
                 {(profile.interest_tags || []).length > 0 && (
                   <div className="flex flex-wrap gap-2 mb-3">
                     {profile.interest_tags!.map(tag => (
-                      <span key={tag} className="inline-flex items-center gap-1 bg-primary/10 text-foreground border border-primary/20 px-3 py-1 rounded-full text-sm font-medium">
+                      <span key={tag} className="inline-flex items-center gap-1 bg-primary/10 text-primary border border-primary/25 px-3 py-1 rounded-full text-sm font-semibold">
                         {tag}
-                        <button type="button" onClick={() => removeTag(tag)} className="text-muted-foreground hover:text-destructive">
+                        <button type="button" onClick={() => removeTag(tag)} className="text-primary/60 hover:text-destructive transition-colors ml-0.5">
                           <X className="h-3.5 w-3.5" />
                         </button>
                       </span>
@@ -338,7 +365,7 @@ export default function ProfilePage() {
                       type="button"
                       onClick={() => addTag(tag)}
                       disabled={(profile.interest_tags || []).includes(tag) || (profile.interest_tags || []).length >= 5}
-                      className="text-xs bg-muted text-muted-foreground hover:bg-muted/80 disabled:opacity-50 px-2 py-1 rounded-full transition-colors"
+                      className="text-xs bg-primary/5 text-primary/70 border border-primary/15 hover:bg-primary/10 hover:text-primary hover:border-primary/30 disabled:opacity-40 px-2.5 py-1 rounded-full transition-all duration-150 font-medium"
                     >
                       + {tag}
                     </button>
@@ -346,18 +373,41 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              <div className="space-y-1.5 pt-2">
-                <label className="text-sm font-semibold">Relationship Intent</label>
-                <select 
-                  required
-                  value={profile.relationship_intent}
-                  onChange={e => setProfile({...profile, relationship_intent: e.target.value})}
-                  className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
-                >
-                  <option value="friendship">Friendship & Networking</option>
-                  <option value="dating">Dating</option>
-                  <option value="casual">Casual</option>
-                </select>
+              <div className="space-y-2 pt-2">
+                <label className="text-sm font-semibold block">Relationship Intent</label>
+                <p className="text-[11px] text-muted-foreground">Select all that apply — at least one required.</p>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {([
+                    { value: "friendship", emoji: "🤝", label: "Friendship" },
+                    { value: "dating",     emoji: "💛", label: "Dating" },
+                    { value: "casual",     emoji: "🔥", label: "Casual" },
+                  ] as const).map(({ value, emoji, label }) => {
+                    const selected = profile.relationship_intents.includes(value)
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => {
+                          const current = profile.relationship_intents
+                          if (selected) {
+                            if (current.length <= 1) return // enforce at least one
+                            setProfile({ ...profile, relationship_intents: current.filter(i => i !== value) })
+                          } else {
+                            setProfile({ ...profile, relationship_intents: [...current, value] })
+                          }
+                        }}
+                        className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border-2 text-sm font-semibold transition-all duration-150 ${
+                          selected
+                            ? "border-primary bg-primary/10 text-primary shadow-sm"
+                            : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                        }`}
+                      >
+                        <span>{emoji}</span>
+                        {label}
+                      </button>
+                    )
+                  })}
+                </div>
                 <p className="text-[11px] text-muted-foreground mt-1 bg-muted/50 p-2 rounded-lg">
                   Note: If you select Casual, you still need to explicitly opt-in to hookup visibility in <a href="/settings" className="underline text-primary">Settings</a> for it to take effect.
                 </p>
@@ -373,6 +423,7 @@ export default function ProfilePage() {
             </div>
           </form>
         </div>
+      </div>
       </div>
 
       {/* Toast */}

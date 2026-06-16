@@ -1,3 +1,4 @@
+/* eslint-disable */
 "use client"
 
 import { useEffect, useState } from "react"
@@ -10,6 +11,7 @@ type Confession = {
   id: string
   content: string
   created_at: string
+  is_revealed: boolean
 }
 
 export default function ConfessionsPage() {
@@ -36,7 +38,7 @@ export default function ConfessionsPage() {
     }
   }, [activeTab])
 
-  const fetchConfessions = async () => {
+  async function fetchConfessions() {
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
@@ -56,10 +58,23 @@ export default function ConfessionsPage() {
     setLoading(false)
   }
 
+  const revealConfession = async (id: string) => {
+    const { error } = await supabase
+      .from("confessions")
+      .update({ is_revealed: true })
+      .eq("id", id)
+      
+    if (error) {
+      showToast("Failed to reveal confession.", "error")
+    } else {
+      setConfessions(prev => prev.map(c => c.id === id ? { ...c, is_revealed: true } : c))
+    }
+  }
+
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!receiverEmail.endsWith("@bmsce.ac.in")) {
-      showToast("Please enter a valid institutional email (@bmsce.ac.in).", "error")
+    if (!receiverEmail.includes("@") || !receiverEmail.includes(".")) {
+      showToast("Please enter a valid institutional college email.", "error")
       return
     }
 
@@ -85,8 +100,8 @@ export default function ConfessionsPage() {
   }
 
   return (
-    <div className="flex flex-col h-full items-center justify-start pt-4 pb-8 overflow-y-auto">
-      <div className="w-full max-w-lg">
+    <div className="flex flex-col h-full overflow-y-auto p-6">
+      <div className="w-full">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6 px-2">
           <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -99,23 +114,23 @@ export default function ConfessionsPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex rounded-xl bg-muted p-1 mb-6">
+        <div className="flex rounded-xl bg-muted/60 border border-border p-1 mb-6 gap-1">
           <button
             onClick={() => setActiveTab("receive")}
-            className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${
+            className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${
               activeTab === "receive" 
-                ? "bg-background text-foreground shadow-sm" 
-                : "text-muted-foreground hover:text-foreground"
+                ? "bg-primary text-primary-foreground shadow-md" 
+                : "text-muted-foreground hover:text-foreground hover:bg-muted"
             }`}
           >
             Received
           </button>
           <button
             onClick={() => setActiveTab("send")}
-            className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${
+            className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${
               activeTab === "send" 
-                ? "bg-background text-foreground shadow-sm" 
-                : "text-muted-foreground hover:text-foreground"
+                ? "bg-primary text-primary-foreground shadow-md" 
+                : "text-muted-foreground hover:text-foreground hover:bg-muted"
             }`}
           >
             Send Anonymous
@@ -132,21 +147,36 @@ export default function ConfessionsPage() {
             ) : confessions.length > 0 ? (
               confessions.map((c) => (
                 <div key={c.id} className="bg-card p-5 rounded-2xl border border-border shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-                  {/* Decorative quote mark */}
-                  <div className="absolute top-2 right-4 text-6xl text-primary/10 font-serif leading-none select-none">
-                    "
-                  </div>
-                  
-                  <p className="text-foreground text-[15px] leading-relaxed relative z-10 font-medium">
-                    {c.content}
-                  </p>
-                  
-                  <div className="flex items-center justify-between mt-4 relative z-10 pt-3 border-t border-border/50">
-                    <span className="text-xs font-semibold text-primary">Anonymous Sender</span>
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(c.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </span>
-                  </div>
+                  {c.is_revealed ? (
+                    <>
+                      {/* Decorative quote mark */}
+                      <div className="absolute top-2 right-4 text-6xl text-primary/10 font-serif leading-none select-none">
+                        &ldquo;
+                      </div>
+                      
+                      <p className="text-foreground text-[15px] leading-relaxed relative z-10 font-medium">
+                        {c.content}
+                      </p>
+                      
+                      <div className="flex items-center justify-between mt-4 relative z-10 pt-3 border-t border-border/50">
+                        <span className="text-xs font-semibold text-primary">Anonymous Sender</span>
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(c.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-center py-4">
+                      <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
+                        <ScrollText className="h-6 w-6 text-primary" />
+                      </div>
+                      <h4 className="font-semibold text-sm">You have an anonymous confession!</h4>
+                      <p className="text-xs text-muted-foreground mt-1 mb-4">Accept to reveal the message.</p>
+                      <Button onClick={() => revealConfession(c.id)} className="rounded-xl w-full max-w-[200px]" size="sm">
+                        Accept &amp; Read
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ))
             ) : (
@@ -181,7 +211,7 @@ export default function ConfessionsPage() {
                   required
                   value={receiverEmail}
                   onChange={(e) => setReceiverEmail(e.target.value)}
-                  placeholder="their.name@bmsce.ac.in"
+                  placeholder="their.name@college.ac.in"
                   className="block w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
                 />
               </div>

@@ -1,36 +1,74 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Kinder
 
-## Getting Started
+Kinder is a campus-exclusive social discovery, friendship, and dating platform designed for undergraduate students. It provides a secure, verified environment for students to meet like-minded peers, send anonymous confessions, and match based on shared relationship intents.
 
-First, run the development server:
+## 🌟 Key Features
+
+- **Institution Verification:** Restricts access to students with verified `.ac.in` email addresses via Supabase Authentication.
+- **Robust Profiles:** Rich profiles including photos, short bios, study fields, graduation year, relationship intent, and interactive interest tags.
+- **Discovery Algorithm:** Dynamic profile matching that respects user intent (e.g., Friendship vs. Dating) and prevents showing discarded or matched profiles.
+- **Hookup Intent Visibility:** A mutual opt-in system specifically for casual intent. Strictly filters discovery so casual seekers only see other casual seekers. Automatically restricted for minor students (under 18) based on Date of Birth.
+- **Anonymous Confessions:** A completely anonymous messaging system where students can send messages to campus crushes. All messages pass through a moderation queue and require the recipient's consent ("Accept & Read") before they are revealed.
+- **Real-Time Chat:** Supabase-powered real-time chat between mutual matches with generated icebreaker prompts to kickstart conversations.
+- **Admin & Moderation Dashboard:** A secure dashboard exclusively for administrative users to approve/reject confessions and manage user reports. Features automated threshold bans (e.g., 7-day bans or permanent suspensions based on report volume).
+
+## 🛠️ Tech Stack
+
+- **Framework:** [Next.js 15](https://nextjs.org/) (App Router, React 19)
+- **Styling:** [Tailwind CSS](https://tailwindcss.com/) with custom design tokens for a vibrant, modern UI.
+- **UI Components:** Built using [Radix UI](https://www.radix-ui.com/) primitives and [Lucide Icons](https://lucide.dev/).
+- **Database & Auth:** [Supabase](https://supabase.com/) (PostgreSQL, Realtime, Storage, Authentication).
+
+## 🚀 Getting Started
+
+Follow these instructions to run the application locally.
+
+### 1. Prerequisites
+
+- **Node.js** (v18 or higher)
+- **npm** or **yarn** or **pnpm**
+- A **Supabase** project (you can create a free tier project at [supabase.com](https://supabase.com))
+
+### 2. Install Dependencies
+
+Clone the repository and install the NPM packages:
+
+```bash
+git clone https://github.com/cyanidemilkshakee/kinder.git
+cd kinder
+npm install
+```
+
+### 3. Environment Variables
+
+Create a `.env.local` file in the root of your project and populate it with your Supabase credentials:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=your-supabase-project-url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+```
+
+### 4. Database Setup
+
+You need to provision your Supabase database schema. Run the following SQL scripts in your Supabase SQL Editor in this exact order:
+
+1. Copy and execute the contents of `schema.sql`.
+2. Copy and execute the contents of `schema_v3.sql`.
+
+*Note: These scripts will set up your tables (`profiles`, `matches`, `messages`, `confessions`, `reports`), trigger functions, storage buckets, and Row Level Security (RLS) policies.*
+
+### 5. Run the Development Server
+
+Start the application:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:790](http://localhost:790) in your browser to see the result. You can log in, create a profile, and start exploring!
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 🔒 Security & Privacy
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Kinder is designed to be a safe space. All data is protected by Supabase Row Level Security (RLS) policies to ensure that users can only access information that they are authorized to see (e.g., their own matches, approved confessions, etc.). The Admin dashboard is strictly restricted by a user role check in the database.
