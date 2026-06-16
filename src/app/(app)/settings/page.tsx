@@ -179,10 +179,10 @@ export default function SettingsPage() {
         <div className="w-full max-w-2xl mx-auto space-y-5">
 
           {/* Page header card */}
-          <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+          <div className="rounded-2xl border border-border overflow-hidden">
             <div className="bg-muted/30 p-6 border-b border-border flex justify-between items-center">
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                <div className="h-10 w-10 rounded-xl flex items-center justify-center">
                   <Shield className="h-5 w-5 text-primary" />
                 </div>
                 <div>
@@ -284,7 +284,7 @@ export default function SettingsPage() {
           </div>
 
           {/* Support & Legal card */}
-          <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+          <div className="rounded-2xl border border-border overflow-hidden">
             <div className="px-6 pt-5 pb-2">
               <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Support & Legal</h3>
             </div>
@@ -297,7 +297,7 @@ export default function SettingsPage() {
                     href={item.href}
                     className="flex items-center gap-4 px-6 py-4 hover:bg-muted/40 transition-colors group"
                   >
-                    <div className={`h-9 w-9 rounded-xl ${item.bg} flex items-center justify-center flex-shrink-0`}>
+                    <div className={`h-9 w-9 rounded-xl flex items-center justify-center flex-shrink-0`}>
                       <Icon className={`h-4 w-4 ${item.color}`} />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -312,7 +312,7 @@ export default function SettingsPage() {
           </div>
 
           {/* Danger Zone card */}
-          <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+          <div className="rounded-2xl border border-border overflow-hidden">
             <div className="px-6 pt-5 pb-2">
               <h3 className="text-sm font-bold uppercase tracking-wider text-destructive">Danger Zone</h3>
             </div>

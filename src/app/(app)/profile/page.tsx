@@ -184,11 +184,11 @@ export default function ProfilePage() {
   return (
     <div className="flex flex-col h-full min-h-0 overflow-y-auto">
       <div className="flex-1 p-6">
-      <div className="w-full max-w-2xl mx-auto bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+      <div className="w-full max-w-2xl mx-auto rounded-2xl border border-border overflow-hidden">
         
         {/* Header */}
         <div className="bg-muted/30 p-6 border-b border-border flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+          <div className="h-10 w-10 rounded-xl flex items-center justify-center">
             <User className="h-5 w-5 text-primary" />
           </div>
           <div>

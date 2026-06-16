@@ -73,8 +73,8 @@ export default function ConfessionsPage() {
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!receiverEmail.includes("@") || !receiverEmail.includes(".")) {
-      showToast("Please enter a valid institutional college email.", "error")
+    if (!receiverEmail.endsWith("@bmsce.ac.in")) {
+      showToast("Please enter a valid institutional email.", "error")
       return
     }
 
@@ -104,7 +104,7 @@ export default function ConfessionsPage() {
       <div className="w-full">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6 px-2">
-          <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+          <div className="h-10 w-10 rounded-xl flex items-center justify-center">
             <ScrollText className="h-5 w-5 text-primary" />
           </div>
           <div>
@@ -119,7 +119,7 @@ export default function ConfessionsPage() {
             onClick={() => setActiveTab("receive")}
             className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${
               activeTab === "receive" 
-                ? "bg-primary text-primary-foreground shadow-md" 
+                ? "bg-primary text-primary-foreground" 
                 : "text-muted-foreground hover:text-foreground hover:bg-muted"
             }`}
           >
@@ -129,7 +129,7 @@ export default function ConfessionsPage() {
             onClick={() => setActiveTab("send")}
             className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${
               activeTab === "send" 
-                ? "bg-primary text-primary-foreground shadow-md" 
+                ? "bg-primary text-primary-foreground" 
                 : "text-muted-foreground hover:text-foreground hover:bg-muted"
             }`}
           >
@@ -146,12 +146,12 @@ export default function ConfessionsPage() {
               </div>
             ) : confessions.length > 0 ? (
               confessions.map((c) => (
-                <div key={c.id} className="bg-card p-5 rounded-2xl border border-border shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+                <div key={c.id} className="p-5 rounded-2xl border border-border relative overflow-hidden group">
                   {c.is_revealed ? (
                     <>
                       {/* Decorative quote mark */}
                       <div className="absolute top-2 right-4 text-6xl text-primary/10 font-serif leading-none select-none">
-                        &ldquo;
+                        "
                       </div>
                       
                       <p className="text-foreground text-[15px] leading-relaxed relative z-10 font-medium">
@@ -167,20 +167,20 @@ export default function ConfessionsPage() {
                     </>
                   ) : (
                     <div className="flex flex-col items-center justify-center text-center py-4">
-                      <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
+                      <div className="h-12 w-12 rounded-full flex items-center justify-center mb-3">
                         <ScrollText className="h-6 w-6 text-primary" />
                       </div>
                       <h4 className="font-semibold text-sm">You have an anonymous confession!</h4>
                       <p className="text-xs text-muted-foreground mt-1 mb-4">Accept to reveal the message.</p>
                       <Button onClick={() => revealConfession(c.id)} className="rounded-xl w-full max-w-[200px]" size="sm">
-                        Accept &amp; Read
+                        Accept & Read
                       </Button>
                     </div>
                   )}
                 </div>
               ))
             ) : (
-              <div className="flex flex-col items-center justify-center py-16 text-center bg-card rounded-2xl border border-border">
+              <div className="flex flex-col items-center justify-center py-16 text-center rounded-2xl border border-border">
                 <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
                   <ScrollText className="h-8 w-8 text-muted-foreground/50" />
                 </div>
@@ -195,7 +195,7 @@ export default function ConfessionsPage() {
 
         {/* Send Tab */}
         {activeTab === "send" && (
-          <div className="bg-card p-6 rounded-2xl border border-border shadow-sm">
+          <div className="p-6 rounded-2xl border border-border">
             <div className="flex items-start gap-3 p-4 bg-primary/10 border border-primary/20 rounded-xl mb-6 text-sm text-foreground">
               <Info className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
               <p>
@@ -211,7 +211,7 @@ export default function ConfessionsPage() {
                   required
                   value={receiverEmail}
                   onChange={(e) => setReceiverEmail(e.target.value)}
-                  placeholder="their.name@college.ac.in"
+                  placeholder="their.name@college.edu"
                   className="block w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
                 />
               </div>
@@ -252,7 +252,7 @@ export default function ConfessionsPage() {
 
       {/* Toast */}
       {toast && (
-        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-toast px-5 py-3 rounded-2xl shadow-xl text-sm font-medium ${
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-toast px-5 py-3 rounded-2xl text-sm font-medium ${
           toast.type === "success" 
             ? "bg-primary text-primary-foreground" 
             : toast.type === "error"

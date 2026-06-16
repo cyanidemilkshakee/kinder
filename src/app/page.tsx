@@ -46,7 +46,7 @@ function AuthForm() {
     checkSession()
 
     if (searchParams.get('error') === 'auth') {
-      setError("Please use your college email ID only.")
+      setError("Please use your college email only.")
     }
   }, [searchParams])
 
@@ -62,7 +62,7 @@ function AuthForm() {
     setMsg("")
 
     if (!isValidEmail(email)) {
-      setError("Please use your institutional college email")
+      setError("Please use your institutional email (@college.edu)")
       return
     }
 
@@ -143,7 +143,7 @@ function AuthForm() {
         </div>
 
         {/* Card */}
-        <div className="rounded-2xl border border-border/60 bg-card/80 p-8 shadow-2xl backdrop-blur-xl">
+        <div className="rounded-2xl border border-border/60 bg-card/80 p-8 backdrop-blur-xl">
           {/* Tabs */}
           <div className="mb-6 flex rounded-xl bg-muted p-1">
             {(["login", "signup"] as const).map((tab) => (
@@ -194,10 +194,9 @@ function AuthForm() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="your.name@college.ac.in"
+                placeholder="your.name@college.edu"
                 className="block w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"
               />
-              <p className="text-xs text-muted-foreground mt-1.5">Enter through your college mail</p>
             </div>
 
             {view !== "forgot" && (

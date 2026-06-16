@@ -127,7 +127,7 @@ export default function LikesPage() {
       <div className="flex h-full items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <div className="relative">
-            <div className="h-16 w-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+            <div className="h-16 w-16 rounded-2xl flex items-center justify-center">
               <Heart className="h-8 w-8 text-primary/40" />
             </div>
             <div className="absolute -top-1 -right-1 h-5 w-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
@@ -140,11 +140,11 @@ export default function LikesPage() {
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
-      <div className="w-full px-6">
+      <div className="w-full px-6 pt-6">
 
         {/* Page Header */}
         <div className="flex items-center gap-3 mb-6 px-1">
-          <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shadow-sm">
+          <div className="h-10 w-10 rounded-xl flex items-center justify-center">
             <Heart className="h-5 w-5 text-primary" />
           </div>
           <div>
@@ -156,11 +156,11 @@ export default function LikesPage() {
         </div>
 
         {/* Content Box */}
-        <div className="w-full bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+        <div className="w-full rounded-2xl border border-border overflow-hidden">
 
           {likers.length === 0 ? (
             <div className="flex flex-col items-center justify-center text-center py-20 px-8">
-              <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center mb-5 shadow-inner">
+              <div className="h-20 w-20 rounded-full flex items-center justify-center mb-5">
                 <Heart className="h-10 w-10 text-primary/40" />
               </div>
               <h3 className="text-xl font-bold text-foreground">No likes yet</h3>
@@ -168,7 +168,7 @@ export default function LikesPage() {
                 Keep swiping on Discover — when someone likes you, they'll appear here.
               </p>
               <Button
-                className="mt-6 rounded-xl px-8 shadow-md"
+                className="mt-6 rounded-xl px-8"
                 onClick={() => router.push("/discover")}
               >
                 Go to Discover
@@ -183,7 +183,7 @@ export default function LikesPage() {
                 return (
                   <div
                     key={liker.id}
-                    className="bg-background border border-border rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:border-primary/30 transition-all duration-200 group"
+                    className="bg-background border border-border rounded-2xl overflow-hidden hover:border-primary/30 transition-all duration-200 group"
                   >
                     {/* Avatar */}
                     <div className="relative h-44 bg-gradient-to-br from-primary/10 to-secondary/10">
@@ -205,7 +205,7 @@ export default function LikesPage() {
                       {liker.interest_tags && liker.interest_tags.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-2.5">
                           {liker.interest_tags.slice(0, 3).map(tag => (
-                            <span key={tag} className="text-xs bg-primary/10 text-primary border border-primary/20 rounded-full px-2 py-0.5 font-medium">
+                            <span key={tag} className="text-xs bg-primary/10 text-primary rounded-full px-2 py-0.5 font-medium">
                               {tag}
                             </span>
                           ))}

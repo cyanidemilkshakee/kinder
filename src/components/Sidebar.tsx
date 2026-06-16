@@ -69,6 +69,7 @@ export function Sidebar() {
           </div>
           <div className="flex flex-col leading-none">
             <span className="text-xl font-extrabold tracking-tight text-sidebar-foreground">Kinder</span>
+            <span className="text-[10px] font-medium text-sidebar-foreground/50 tracking-widest uppercase">Campus</span>
           </div>
         </Link>
       </div>
@@ -152,6 +153,7 @@ export function Sidebar() {
           </div>
           <div className="overflow-hidden flex-1 min-w-0">
             <p className="text-xs font-semibold truncate text-sidebar-foreground">{userProfile?.real_name || 'Loading…'}</p>
+            <p className="text-[10px] text-sidebar-foreground/40 font-medium tracking-wide uppercase">Campus</p>
           </div>
         </div>
       </div>

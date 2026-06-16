@@ -268,13 +268,13 @@ export default function DiscoverPage() {
             {/* Stack indicator */}
             {profiles.length > 1 && (
               <div className="relative h-2 mb-[-8px]">
-                <div className="absolute inset-x-4 top-0 h-full bg-card/80 rounded-t-2xl border border-border/40" />
+                <div className="absolute inset-x-4 top-0 h-full rounded-t-2xl border border-border/40" />
               </div>
             )}
 
             {/* Card */}
             <div
-              className={`relative bg-card rounded-2xl border border-border shadow-xl overflow-hidden transition-all duration-350 ${
+              className={`relative rounded-2xl border border-border overflow-hidden transition-all duration-350 ${
                 swipingId === current.id
                   ? "opacity-0 scale-95"
                   : "opacity-100 scale-100"
@@ -355,7 +355,7 @@ export default function DiscoverPage() {
 
                   <button
                     onClick={() => handleSwipe(true)}
-                    className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-primary py-3 text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-all hover:scale-105 active:scale-95 shadow-md hover:shadow-primary/30"
+                    className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-primary py-3 text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-all hover:scale-105 active:scale-95"
                   >
                     <Heart className="h-4 w-4" /> Like
                   </button>
@@ -369,8 +369,8 @@ export default function DiscoverPage() {
             </p>
           </>
         ) : (
-          <div className="flex flex-col items-center justify-center text-center p-8 bg-card rounded-2xl border border-border shadow-sm mt-4">
-            <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+          <div className="flex flex-col items-center justify-center text-center p-8 rounded-2xl border border-border mt-4">
+            <div className="h-16 w-16 rounded-full flex items-center justify-center mb-4">
               <Heart className="h-8 w-8 text-primary" />
             </div>
             <h3 className="text-lg font-bold">You've seen everyone!</h3>
@@ -387,13 +387,13 @@ export default function DiscoverPage() {
       {/* ── MATCH MODAL ── */}
       {matchModal.open && matchModal.matchedUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="animate-match-pop w-full max-w-sm rounded-3xl bg-card border border-border shadow-2xl overflow-hidden">
+          <div className="animate-match-pop w-full max-w-sm rounded-3xl border border-border overflow-hidden">
             {/* Gradient header */}
             <div className="relative bg-gradient-to-br from-primary/25 via-secondary/15 to-primary/10 p-8 pb-4 flex flex-col items-center">
               {/* Pulse ring */}
               <div className="relative">
                 <div className="absolute inset-0 rounded-full bg-primary/30 animate-pulse-ring" />
-                <div className="h-24 w-24 rounded-full overflow-hidden border-4 border-primary shadow-xl relative z-10">
+                <div className="h-24 w-24 rounded-full overflow-hidden border-4 border-primary relative z-10">
                   <img
                     src={matchModal.matchedUser.avatar_url || `https://api.dicebear.com/9.x/micah/svg?seed=${matchModal.matchedUser.id}`}
                     alt={matchModal.matchedUser.real_name}
@@ -432,7 +432,7 @@ export default function DiscoverPage() {
       {/* ── REPORT MODAL ── */}
       {reportModal.open && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-2xl bg-card border border-border shadow-2xl overflow-hidden">
+          <div className="w-full max-w-sm rounded-2xl border border-border overflow-hidden">
             <div className="p-5 border-b border-border">
               <h3 className="font-bold text-lg">Report {reportModal.targetName}</h3>
               <p className="text-sm text-muted-foreground mt-1">
@@ -477,7 +477,7 @@ export default function DiscoverPage() {
 
       {/* ── TOAST ── */}
       {toast && (
-        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-toast flex items-center gap-2 px-5 py-3 rounded-2xl shadow-xl text-sm font-medium max-w-xs text-center ${
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-toast flex items-center gap-2 px-5 py-3 rounded-2xl text-sm font-medium max-w-xs text-center ${
           toast.type === "success"
             ? "bg-primary text-primary-foreground"
             : toast.type === "error"

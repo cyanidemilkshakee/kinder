@@ -16,10 +16,10 @@ const policySections: PolicySection[] = [
     title: "1. Who We Are",
     content: (
       <p>
-        Kinder BMSCE ("Kinder", "we", "us", or "our") is a campus-exclusive social platform
-        operated for students of BMS College of Engineering (BMSCE), Bengaluru. We are not
-        affiliated with BMSCE administration. This Privacy Policy explains how we collect, use,
-        and protect your personal information when you use the Kinder platform.
+        Kinder ("Kinder", "we", "us", or "our") is a campus-exclusive social platform
+        operated for college students. We are not affiliated with college administration.
+        This Privacy Policy explains how we collect, use, and protect your personal
+        information when you use the Kinder platform.
       </p>
     ),
   },
@@ -32,7 +32,7 @@ const policySections: PolicySection[] = [
         <li><strong>Usage Data:</strong> Profile views, swipe activity (likes/passes), match events, and chat messages.</li>
         <li><strong>Confessions:</strong> Anonymous text posts submitted to the Confessions feed.</li>
         <li><strong>Support Messages:</strong> Messages and bug reports you send to us through the Contact Us form.</li>
-        <li><strong>Device & Log Data:</strong> Browser type, IP address, timestamps, and error logs collected automatically for security and debugging purposes.</li>
+        <li><strong>Device &amp; Log Data:</strong> Browser type, IP address, timestamps, and error logs collected automatically for security and debugging purposes.</li>
       </ul>
     ),
   },
@@ -67,7 +67,7 @@ const policySections: PolicySection[] = [
     title: "5. Who Can See Your Profile",
     content: (
       <ul className="list-disc list-inside space-y-2">
-        <li>Your profile is visible to other verified BMSCE students who are logged into Kinder.</li>
+        <li>Your profile is visible to other verified college students who are logged into Kinder.</li>
         <li>Only mutual matches can start a conversation with you.</li>
         <li>Confessions are posted anonymously — your name is never attached to a confession publicly.</li>
         <li>Platform administrators (the developer) can access profile data for moderation and support purposes only.</li>
@@ -111,7 +111,7 @@ const policySections: PolicySection[] = [
     title: "9. Minors",
     content: (
       <p>
-        Kinder is intended for college students and requires a BMSCE email for sign-up.
+        Kinder is intended for college students and requires a college email for sign-up.
         Certain features (Casual / Hookup Intent) are restricted to users aged 18 and above,
         verified by date of birth during onboarding. If we become aware that a minor has
         misrepresented their age, we will suspend their account.
@@ -151,7 +151,7 @@ export default function PrivacyPolicyPage() {
         <div className="w-full max-w-2xl mx-auto space-y-5">
 
           {/* Header */}
-          <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+          <div className="rounded-2xl border border-border overflow-hidden">
             <div className="bg-muted/30 p-6 border-b border-border flex items-center gap-3">
               <Link
                 href="/settings"
@@ -160,7 +160,7 @@ export default function PrivacyPolicyPage() {
                 <ArrowLeft className="h-4 w-4 text-muted-foreground" />
               </Link>
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-violet-500/10 flex items-center justify-center">
+                <div className="h-10 w-10 rounded-xl flex items-center justify-center">
                   <FileText className="h-5 w-5 text-violet-500" />
                 </div>
                 <div>
@@ -172,7 +172,7 @@ export default function PrivacyPolicyPage() {
 
             <div className="p-6">
               <div className="bg-primary/5 border border-primary/15 rounded-xl p-4 text-sm text-muted-foreground leading-relaxed">
-                This Privacy Policy describes how Kinder BMSCE collects, uses, and protects
+                This Privacy Policy describes how Kinder collects, uses, and protects
                 your personal information. By using Kinder, you agree to the practices described below.
                 Please read this carefully.
               </div>
@@ -180,7 +180,7 @@ export default function PrivacyPolicyPage() {
           </div>
 
           {/* Policy sections */}
-          <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden divide-y divide-border">
+          <div className="rounded-2xl border border-border overflow-hidden divide-y divide-border">
             {policySections.map((section) => (
               <div key={section.title} className="p-6">
                 <h3 className="font-bold text-sm mb-3">{section.title}</h3>
@@ -194,7 +194,7 @@ export default function PrivacyPolicyPage() {
           {/* Footer */}
           <div className="text-center pb-4">
             <p className="text-xs text-muted-foreground">
-              Kinder BMSCE · Campus-exclusive · Not affiliated with BMSCE administration
+              Kinder · Campus-exclusive · Not affiliated with college administration
             </p>
           </div>
 

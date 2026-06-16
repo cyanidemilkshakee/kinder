@@ -4,16 +4,16 @@ import { Info, Shield, Heart, Zap, Lock } from "lucide-react"
 export default function AboutPage() {
   return (
     <div className="flex flex-col h-full overflow-y-auto p-6">
-      <div className="w-full bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+      <div className="w-full rounded-2xl border border-border overflow-hidden">
         
         {/* Header */}
         <div className="bg-gradient-to-br from-primary/15 via-secondary/10 to-transparent p-8 md:p-12 text-center border-b border-border">
-          <div className="mx-auto h-16 w-16 bg-primary/20 rounded-2xl flex items-center justify-center mb-6 shadow-sm">
+          <div className="mx-auto h-16 w-16 rounded-2xl flex items-center justify-center mb-6">
             <Info className="h-8 w-8 text-primary" />
           </div>
           <h1 className="text-3xl font-extrabold tracking-tight mb-3">About Kinder</h1>
           <p className="text-muted-foreground text-sm max-w-md mx-auto leading-relaxed">
-            Kinder is an unofficial, student-built platform designed to foster meaningful connections in a safe, verified college environment.
+            Kinder is an unofficial, student-built platform designed specifically for the campus community to foster meaningful connections in a safe, verified environment.
           </p>
         </div>
 
@@ -22,7 +22,7 @@ export default function AboutPage() {
           <section className="space-y-4">
             <h2 className="text-xl font-bold border-b border-border pb-2">Why Kinder?</h2>
             <p className="text-sm text-foreground/80 leading-relaxed">
-              Meeting new people outside of your department or standard social circles can be hard. Traditional dating apps feel unsafe, saturated with fake profiles, or geographically disconnected. Kinder solves this by limiting access strictly to verified college students, ensuring that the people you talk to are actual peers on campus.
+              Meeting new people outside of your department or standard social circles can be hard. Traditional dating apps feel unsafe, saturated with fake profiles, or geographically disconnected. Kinder solves this by limiting access strictly to verified students, ensuring that the people you talk to are actual peers on campus.
             </p>
           </section>
 
@@ -31,11 +31,11 @@ export default function AboutPage() {
             
             <div className="grid gap-5">
               <div className="flex gap-4 items-start">
-                <div className="h-10 w-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0 mt-1 shadow-sm">
+                <div className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-1">
                   <Shield className="h-5 w-5 text-primary" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-base">Verified & Safe</h3>
+                  <h3 className="font-bold text-base">Verified &amp; Safe</h3>
                   <p className="text-sm text-muted-foreground mt-1">
                     Every user must verify their college email. We have zero tolerance for impersonation or harassment.
                   </p>
@@ -43,7 +43,7 @@ export default function AboutPage() {
               </div>
 
               <div className="flex gap-4 items-start">
-                <div className="h-10 w-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0 mt-1 shadow-sm">
+                <div className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-1">
                   <Lock className="h-5 w-5 text-primary" />
                 </div>
                 <div>
@@ -55,7 +55,7 @@ export default function AboutPage() {
               </div>
 
               <div className="flex gap-4 items-start">
-                <div className="h-10 w-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0 mt-1 shadow-sm">
+                <div className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-1">
                   <Zap className="h-5 w-5 text-primary" />
                 </div>
                 <div>

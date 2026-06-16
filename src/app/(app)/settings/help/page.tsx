@@ -32,11 +32,11 @@ const sections: Section[] = [
       },
       {
         q: "Who can see my profile?",
-        a: "Only verified students on Kinder can see your profile. Your profile is shown to users who haven't matched with you yet. You can hide your profile at any time from Settings → Profile Visibility.",
+        a: "Only verified college students on Kinder can see your profile. Your profile is shown to users who haven't matched with you yet. You can hide your profile at any time from Settings → Profile Visibility.",
       },
       {
         q: "Is my real name shown publicly?",
-        a: "Yes — Kinder is a real-identity platform for college students. Authenticity helps build trust. However, only other logged-in students can see your profile.",
+        a: "Yes — Kinder is a real-identity platform for campus students. Authenticity helps build trust. However, only other logged-in students can see your profile.",
       },
     ],
   },
@@ -92,7 +92,7 @@ const sections: Section[] = [
     faqs: [
       {
         q: "What are Confessions?",
-        a: "Confessions is an anonymous posting space where students can share thoughts, feelings, or light-hearted messages. All posts are anonymous — your name is never shown.",
+        a: "Confessions is an anonymous posting space where campus students can share thoughts, feelings, or light-hearted messages. All posts are anonymous — your name is never shown.",
       },
       {
         q: "Can confessions be reported?",
@@ -152,7 +152,7 @@ const sections: Section[] = [
       },
       {
         q: "Why can't I change some profile fields?",
-        a: "Fields like your email are set at sign-up and linked to your verified college identity. If you believe there's an error, contact us.",
+        a: "Fields like your email are set at sign-up and linked to your verified campus identity. If you believe there's an error, contact us.",
       },
       {
         q: "I forgot my password. What do I do?",
@@ -165,7 +165,7 @@ const sections: Section[] = [
 function FAQItem({ faq }: { faq: FAQ }) {
   const [open, setOpen] = useState(false)
   return (
-    <div className={`border border-border rounded-xl overflow-hidden transition-all duration-200 ${open ? 'shadow-sm' : ''}`}>
+    <div className={`border border-border rounded-xl overflow-hidden transition-all duration-200`}>
       <button
         onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between gap-3 px-4 py-3.5 text-left hover:bg-muted/40 transition-colors"
@@ -191,7 +191,7 @@ export default function HelpPage() {
         <div className="w-full max-w-2xl mx-auto space-y-5">
 
           {/* Header card */}
-          <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+          <div className="rounded-2xl border border-border overflow-hidden">
             <div className="bg-muted/30 p-6 border-b border-border flex items-center gap-3">
               <Link
                 href="/settings"
@@ -200,11 +200,11 @@ export default function HelpPage() {
                 <ArrowLeft className="h-4 w-4 text-muted-foreground" />
               </Link>
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                <div className="h-10 w-10 rounded-xl flex items-center justify-center">
                   <HelpCircle className="h-5 w-5 text-emerald-500" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold">Help & Support</h2>
+                  <h2 className="text-xl font-bold">Help &amp; Support</h2>
                   <p className="text-sm text-muted-foreground">Everything you need to know about Kinder.</p>
                 </div>
               </div>
@@ -225,9 +225,9 @@ export default function HelpPage() {
           {sections.map((section) => {
             const Icon = section.icon
             return (
-              <div key={section.title} className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+              <div key={section.title} className="rounded-2xl border border-border overflow-hidden">
                 <div className="flex items-center gap-3 px-6 pt-5 pb-3">
-                  <div className={`h-8 w-8 rounded-lg ${section.bg} flex items-center justify-center flex-shrink-0`}>
+                  <div className={`h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0`}>
                     <Icon className={`h-4 w-4 ${section.color}`} />
                   </div>
                   <h3 className="font-bold text-sm">{section.title}</h3>
@@ -242,7 +242,7 @@ export default function HelpPage() {
           })}
 
           {/* Still need help */}
-          <div className="bg-card rounded-2xl border border-border shadow-sm p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+          <div className="rounded-2xl border border-border p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
             <div className="flex-1">
               <p className="font-semibold text-sm">Still need help?</p>
               <p className="text-xs text-muted-foreground mt-0.5">Our team is happy to assist you with anything not covered here.</p>
