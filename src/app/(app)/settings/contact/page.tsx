@@ -119,7 +119,7 @@ function ContactForm() {
         <div className="flex items-start gap-3 p-4 bg-orange-500/10 border border-orange-500/25 rounded-xl">
           <Bug className="h-4 w-4 text-orange-500 flex-shrink-0 mt-0.5" />
           <p className="text-sm text-orange-700 dark:text-orange-400 leading-relaxed">
-            Please describe the bug in as much detail as possible — what you did, what you expected, and what actually happened.
+            Please describe the bug in as much detail as possible - what you did, what you expected, and what actually happened.
           </p>
         </div>
       )}
@@ -249,37 +249,37 @@ function ContactForm() {
 export default function ContactPage() {
   return (
     <div className="flex flex-col h-full min-h-0 overflow-y-auto">
-      <div className="flex-1 p-6">
-        <div className="w-full max-w-2xl mx-auto rounded-2xl border border-border overflow-hidden">
+      <div className="flex-1 p-6 md:p-12">
+        <div className="w-full max-w-2xl mx-auto space-y-12">
 
           {/* Header */}
-          <div className="bg-muted/30 p-6 border-b border-border flex items-center gap-3">
+          <div className="space-y-6">
             <Link
               href="/settings"
-              className="h-9 w-9 rounded-xl border border-border bg-background flex items-center justify-center hover:bg-muted transition-colors flex-shrink-0"
+              className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
-              <ArrowLeft className="h-4 w-4 text-muted-foreground" />
+              <ArrowLeft className="h-4 w-4" /> Back to Settings
             </Link>
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl flex items-center justify-center">
-                <Mail className="h-5 w-5 text-zinc-500" />
-              </div>
+            <div className="space-y-4">
+              <Mail className="h-10 w-10 text-zinc-500 mb-2" />
               <div>
-                <Suspense fallback={<h2 className="text-xl font-bold">Contact Us</h2>}>
+                <Suspense fallback={<h2 className="text-3xl font-extrabold tracking-tight">Contact Us</h2>}>
                   <ContactPageTitle />
                 </Suspense>
-                <p className="text-sm text-muted-foreground">We typically respond within 24–48 hours.</p>
+                <p className="text-sm text-muted-foreground pt-2">We typically respond within 24–48 hours.</p>
               </div>
             </div>
           </div>
 
-          <Suspense fallback={
-            <div className="p-8 flex justify-center">
-              <div className="h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            </div>
-          }>
-            <ContactForm />
-          </Suspense>
+          <div className="pt-4">
+            <Suspense fallback={
+              <div className="p-8 flex justify-center">
+                <div className="h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              </div>
+            }>
+              <ContactForm />
+            </Suspense>
+          </div>
         </div>
       </div>
     </div>
@@ -289,5 +289,5 @@ export default function ContactPage() {
 function ContactPageTitle() {
   const searchParams = useSearchParams()
   const isBugReport = searchParams.get("type") === "bug"
-  return <h2 className="text-xl font-bold">{isBugReport ? "Report a Bug" : "Contact Us"}</h2>
+  return <h2 className="text-3xl font-extrabold tracking-tight">{isBugReport ? "Report a Bug" : "Contact Us"}</h2>
 }

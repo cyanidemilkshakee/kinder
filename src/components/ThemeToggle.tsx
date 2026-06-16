@@ -14,7 +14,7 @@ export function ThemeToggle() {
       <Button
         variant="outline"
         size="icon"
-        className="rounded-full w-11 h-11 shadow-xl border-2 border-primary/30 bg-card/80 backdrop-blur-md hover:bg-card hover:border-primary/60 transition-all duration-300 hover:scale-110"
+        className="rounded-full w-11 h-11 shadow-xl border-2 border-primary/30 bg-background/80 backdrop-blur-md hover:bg-background hover:border-primary/60 transition-all duration-300 hover:scale-110"
         onClick={() => setTheme(theme === "light" ? "dark" : "light")}
         title="Toggle theme"
       >

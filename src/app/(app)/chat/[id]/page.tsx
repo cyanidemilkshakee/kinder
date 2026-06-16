@@ -148,16 +148,16 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center bg-card/40">
+      <div className="flex h-full items-center justify-center bg-transparent">
         <Loader2 className="h-6 w-6 animate-spin text-primary" />
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-card/40">
+    <div className="flex flex-col h-full overflow-hidden bg-transparent">
       {/* Header */}
-      <div className="bg-card/90 backdrop-blur-md border-b border-border px-6 py-4 flex items-center gap-4 sticky top-0 z-10">
+      <div className="bg-background/90 backdrop-blur-md border-b border-border px-6 py-4 flex items-center gap-4 sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden border border-border flex-shrink-0">
             <img src={otherUserAvatar!} alt={otherUserName} className="w-full h-full object-cover" />
@@ -184,7 +184,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 <button
                   key={i}
                   onClick={() => sendContent(prompt)}
-                  className="text-xs text-left px-4 py-3 rounded-xl border border-border bg-card hover:border-primary/50 hover:bg-primary/5 transition-colors shadow-sm"
+                  className="text-xs text-left px-4 py-3 rounded-xl border border-border bg-background hover:border-primary/50 hover:bg-primary/5 transition-colors shadow-sm"
                 >
                   {prompt}
                 </button>
@@ -217,7 +217,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                       className={`px-4 py-2 text-sm shadow-sm ${
                         isMe 
                           ? 'bg-primary text-primary-foreground rounded-2xl rounded-tr-sm' 
-                          : 'bg-card border border-border text-foreground rounded-2xl rounded-tl-sm'
+                          : 'bg-background border border-border text-foreground rounded-2xl rounded-tl-sm'
                       }`}
                     >
                       {msg.content}
@@ -235,7 +235,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       </div>
 
       {/* Input */}
-      <div className="bg-card/90 backdrop-blur-md border-t border-border p-4 sticky bottom-0">
+      <div className="bg-background/90 backdrop-blur-md border-t border-border p-4 sticky bottom-0">
         <form onSubmit={sendMessage} className="flex gap-2 max-w-4xl mx-auto">
           <input
             type="text"

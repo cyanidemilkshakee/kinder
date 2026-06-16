@@ -114,7 +114,7 @@ export default function ConfessionsPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex rounded-xl bg-muted/60 border border-border p-1 mb-6 gap-1">
+        <div className="flex p-1 mb-6 gap-1">
           <button
             onClick={() => setActiveTab("receive")}
             className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${
@@ -146,7 +146,7 @@ export default function ConfessionsPage() {
               </div>
             ) : confessions.length > 0 ? (
               confessions.map((c) => (
-                <div key={c.id} className="p-5 rounded-2xl border border-border relative overflow-hidden group">
+                <div key={c.id} className="p-5 relative overflow-hidden group">
                   {c.is_revealed ? (
                     <>
                       {/* Decorative quote mark */}
@@ -180,7 +180,7 @@ export default function ConfessionsPage() {
                 </div>
               ))
             ) : (
-              <div className="flex flex-col items-center justify-center py-16 text-center rounded-2xl border border-border">
+              <div className="flex flex-col items-center justify-center py-16 text-center">
                 <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
                   <ScrollText className="h-8 w-8 text-muted-foreground/50" />
                 </div>
@@ -195,7 +195,7 @@ export default function ConfessionsPage() {
 
         {/* Send Tab */}
         {activeTab === "send" && (
-          <div className="p-6 rounded-2xl border border-border">
+          <div className="p-6">
             <div className="flex items-start gap-3 p-4 bg-primary/10 border border-primary/20 rounded-xl mb-6 text-sm text-foreground">
               <Info className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
               <p>
@@ -257,7 +257,7 @@ export default function ConfessionsPage() {
             ? "bg-primary text-primary-foreground" 
             : toast.type === "error"
             ? "bg-destructive text-white"
-            : "bg-card border border-border text-foreground"
+            : "bg-background border border-border text-foreground"
         }`}>
           {toast.msg}
         </div>

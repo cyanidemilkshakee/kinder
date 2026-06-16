@@ -10,7 +10,7 @@ import { Loader2 } from "lucide-react"
 function GoogleIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-4 w-4 mr-2" aria-hidden="true" fill="none">
-      {/* Monochrome Google 'G' — no blue/red/green/yellow brand colors */}
+      {/* Monochrome Google 'G' - no blue/red/green/yellow brand colors */}
       <circle cx="12" cy="12" r="10" className="fill-stone-200 dark:fill-zinc-700" />
       <path
         d="M17.5 12.2h-5.4v2.1h3.1c-.3 1.5-1.6 2.4-3.1 2.4-1.9 0-3.4-1.5-3.4-3.4s1.5-3.4 3.4-3.4c.8 0 1.6.3 2.2.8l1.5-1.5C14.6 8.4 13.4 8 12.1 8 9 8 6.5 10.5 6.5 13.3S9 18.6 12.1 18.6c2.9 0 5.2-2 5.2-5.1 0-.4 0-.9-.1-1.3h.3z"
@@ -143,7 +143,7 @@ function AuthForm() {
         </div>
 
         {/* Card */}
-        <div className="rounded-2xl border border-border/60 bg-card/80 p-8 backdrop-blur-xl">
+        <div className="rounded-2xl border border-border/60 bg-background/80 p-8 backdrop-blur-xl">
           {/* Tabs */}
           <div className="mb-6 flex rounded-xl bg-muted p-1">
             {(["login", "signup"] as const).map((tab) => (

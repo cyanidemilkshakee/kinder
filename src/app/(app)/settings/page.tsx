@@ -175,46 +175,44 @@ export default function SettingsPage() {
 
   return (
     <div className="flex flex-col h-full min-h-0 overflow-y-auto">
-      <div className="flex-1 p-6">
-        <div className="w-full max-w-2xl mx-auto space-y-5">
+      <div className="flex-1 p-6 md:p-12">
+        <div className="w-full max-w-2xl text-left space-y-5">
 
-          {/* Page header card */}
-          <div className="rounded-2xl border border-border overflow-hidden">
-            <div className="bg-muted/30 p-6 border-b border-border flex justify-between items-center">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl flex items-center justify-center">
-                  <Shield className="h-5 w-5 text-primary" />
-                </div>
+          {/* Page header */}
+          <div className="space-y-6 pb-6">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-4">
+                <Shield className="h-10 w-10 text-primary mb-2" />
                 <div>
-                  <h2 className="text-2xl font-bold">Settings</h2>
+                  <h2 className="text-3xl font-extrabold tracking-tight">Settings</h2>
                   <p className="text-sm text-muted-foreground">Preferences, privacy, and account control.</p>
                 </div>
               </div>
               {saving && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
             </div>
 
-            <div className="p-6 md:p-8 space-y-10">
+            <div className="space-y-10 pt-4">
 
               {/* App Appearance */}
               <section className="space-y-4">
-                <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-2">Appearance</h3>
+                <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground border-b border-border/50 pb-2">Appearance</h3>
                 <div className="grid grid-cols-3 gap-3">
                   <button
-                    className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 transition-all duration-200 ${theme === 'light' ? 'border-primary bg-primary/10 text-primary font-semibold shadow-sm' : 'border-border bg-card hover:bg-muted/60 text-muted-foreground hover:text-foreground'}`}
+                    className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 transition-all duration-200 ${theme === 'light' ? 'border-primary bg-primary/10 text-primary font-semibold' : 'border-transparent bg-transparent hover:bg-muted/60 text-muted-foreground hover:text-foreground'}`}
                     onClick={() => setTheme('light')}
                   >
                     <Sun className="h-5 w-5" />
                     <span className="text-sm">Light</span>
                   </button>
                   <button
-                    className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 transition-all duration-200 ${theme === 'dark' ? 'border-primary bg-primary/10 text-primary font-semibold shadow-sm' : 'border-border bg-card hover:bg-muted/60 text-muted-foreground hover:text-foreground'}`}
+                    className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 transition-all duration-200 ${theme === 'dark' ? 'border-primary bg-primary/10 text-primary font-semibold' : 'border-transparent bg-transparent hover:bg-muted/60 text-muted-foreground hover:text-foreground'}`}
                     onClick={() => setTheme('dark')}
                   >
                     <Moon className="h-5 w-5" />
                     <span className="text-sm">Dark</span>
                   </button>
                   <button
-                    className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 transition-all duration-200 ${theme === 'system' ? 'border-primary bg-primary/10 text-primary font-semibold shadow-sm' : 'border-border bg-card hover:bg-muted/60 text-muted-foreground hover:text-foreground'}`}
+                    className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 transition-all duration-200 ${theme === 'system' ? 'border-primary bg-primary/10 text-primary font-semibold' : 'border-transparent bg-transparent hover:bg-muted/60 text-muted-foreground hover:text-foreground'}`}
                     onClick={() => setTheme('system')}
                   >
                     <Monitor className="h-5 w-5" />
@@ -225,10 +223,10 @@ export default function SettingsPage() {
 
               {/* Discovery & Privacy */}
               <section className="space-y-4">
-                <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-2">Discovery & Privacy</h3>
+                <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground border-b border-border/50 pb-2">Discovery & Privacy</h3>
 
                 {/* Visibility Toggle */}
-                <div className="flex items-start justify-between p-4 rounded-xl border border-border bg-background gap-4">
+                <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       {settings.is_visible
@@ -252,7 +250,7 @@ export default function SettingsPage() {
                 </div>
 
                 {/* Hookup Opt-In Toggle */}
-                <div className={`flex items-start justify-between p-4 rounded-xl border transition-all gap-4 ${settings.hookup_opt_in ? 'border-orange-500/50 bg-orange-500/5' : 'border-border bg-background'} ${isMinor ? 'opacity-50' : ''}`}>
+                <div className={`flex items-start justify-between transition-all gap-4 ${isMinor ? 'opacity-50' : ''}`}>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <Flame className={`h-4 w-4 flex-shrink-0 ${settings.hookup_opt_in ? 'text-orange-500' : 'text-muted-foreground'}`} />
@@ -283,78 +281,73 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Support & Legal card */}
-          <div className="rounded-2xl border border-border overflow-hidden">
-            <div className="px-6 pt-5 pb-2">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Support & Legal</h3>
-            </div>
-            <div className="divide-y divide-border">
+          {/* Support & Legal */}
+          <div className="space-y-4 pt-6">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground border-b border-border/50 pb-2">Support & Legal</h3>
+            <div className="grid gap-2">
               {supportLinks.map((item) => {
                 const Icon = item.icon
                 return (
                   <Link
                     key={item.label}
                     href={item.href}
-                    className="flex items-center gap-4 px-6 py-4 hover:bg-muted/40 transition-colors group"
+                    className="flex items-center gap-4 py-3 hover:opacity-80 transition-opacity group"
                   >
-                    <div className={`h-9 w-9 rounded-xl flex items-center justify-center flex-shrink-0`}>
-                      <Icon className={`h-4 w-4 ${item.color}`} />
+                    <div className={`h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0`}>
+                      <Icon className={`h-6 w-6 ${item.color}`} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold">{item.label}</p>
+                      <p className="text-base font-semibold">{item.label}</p>
                       <p className="text-xs text-muted-foreground">{item.desc}</p>
                     </div>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors flex-shrink-0" />
+                    <ChevronRight className="h-5 w-5 text-muted-foreground/50 transition-colors flex-shrink-0" />
                   </Link>
                 )
               })}
             </div>
           </div>
 
-          {/* Danger Zone card */}
-          <div className="rounded-2xl border border-border overflow-hidden">
-            <div className="px-6 pt-5 pb-2">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-destructive">Danger Zone</h3>
-            </div>
-            <div className="p-4 md:p-6">
-              <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between p-5 rounded-xl border ${isDeletionQueued ? 'border-destructive bg-destructive/10' : 'border-destructive/30 bg-destructive/5'} gap-4`}>
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
-                  <div>
-                    <h4 className="font-semibold text-sm text-destructive">
-                      {isDeletionQueued ? "Account Scheduled for Deletion" : "Delete Account"}
-                    </h4>
-                    <p className="text-xs text-destructive/80 mt-1 max-w-sm leading-relaxed">
-                      {isDeletionQueued
-                        ? `Your account is hidden and will be permanently deleted in 7 days. You can cancel this process.`
-                        : "Permanently delete your profile, matches, and messages. This action triggers a 7-day grace period."}
-                    </p>
-                  </div>
+          {/* Danger Zone */}
+          <div className="space-y-4 pt-6 pb-12">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-destructive border-b border-destructive/20 pb-2">Danger Zone</h3>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-6 w-6 text-destructive flex-shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="font-semibold text-base text-destructive">
+                    {isDeletionQueued ? "Account Scheduled for Deletion" : "Delete Account"}
+                  </h4>
+                  <p className="text-sm text-destructive/80 mt-1 max-w-sm leading-relaxed">
+                    {isDeletionQueued
+                      ? `Your account is hidden and will be permanently deleted in 7 days. You can cancel this process.`
+                      : "Permanently delete your profile, matches, and messages. This action triggers a 7-day grace period."}
+                  </p>
                 </div>
-
-                {isDeletionQueued ? (
-                  <Button
-                    onClick={handleAccountAction}
-                    className="w-full sm:w-auto rounded-xl bg-background text-foreground hover:bg-muted"
-                  >
-                    Cancel Deletion
-                  </Button>
-                ) : (
-                  <div className="w-full sm:w-auto flex flex-col gap-2">
-                    {deleteConfirm && (
-                      <span className="text-[10px] text-destructive font-bold uppercase tracking-wider text-center">Are you sure?</span>
-                    )}
-                    <Button
-                      variant="destructive"
-                      onClick={handleAccountAction}
-                      className={`w-full rounded-xl transition-all ${deleteConfirm ? 'ring-2 ring-destructive ring-offset-2 ring-offset-background' : ''}`}
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      {deleteConfirm ? "Confirm Deletion" : "Delete Account"}
-                    </Button>
-                  </div>
-                )}
               </div>
+
+              {isDeletionQueued ? (
+                <Button
+                  onClick={handleAccountAction}
+                  className="w-full sm:w-auto rounded-xl"
+                  variant="outline"
+                >
+                  Cancel Deletion
+                </Button>
+              ) : (
+                <div className="w-full sm:w-auto flex flex-col gap-2">
+                  {deleteConfirm && (
+                    <span className="text-[10px] text-destructive font-bold uppercase tracking-wider text-center">Are you sure?</span>
+                  )}
+                  <Button
+                    variant="destructive"
+                    onClick={handleAccountAction}
+                    className={`w-full rounded-xl transition-all ${deleteConfirm ? 'ring-2 ring-destructive ring-offset-2 ring-offset-background' : ''}`}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    {deleteConfirm ? "Confirm Deletion" : "Delete Account"}
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -368,7 +361,7 @@ export default function SettingsPage() {
             ? "bg-primary text-primary-foreground"
             : toast.type === "error"
             ? "bg-destructive text-white"
-            : "bg-card border border-border text-foreground"
+            : "bg-background border border-border text-foreground"
         }`}>
           {toast.msg}
         </div>

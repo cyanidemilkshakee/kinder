@@ -69,7 +69,6 @@ export function Sidebar() {
           </div>
           <div className="flex flex-col leading-none">
             <span className="text-xl font-extrabold tracking-tight text-sidebar-foreground">Kinder</span>
-            <span className="text-[10px] font-medium text-sidebar-foreground/50 tracking-widest uppercase">Campus</span>
           </div>
         </Link>
       </div>

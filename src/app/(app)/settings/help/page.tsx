@@ -36,7 +36,7 @@ const sections: Section[] = [
       },
       {
         q: "Is my real name shown publicly?",
-        a: "Yes — Kinder is a real-identity platform for campus students. Authenticity helps build trust. However, only other logged-in students can see your profile.",
+        a: "Yes - Kinder is a real-identity platform for campus students. Authenticity helps build trust. However, only other logged-in students can see your profile.",
       },
     ],
   },
@@ -92,7 +92,7 @@ const sections: Section[] = [
     faqs: [
       {
         q: "What are Confessions?",
-        a: "Confessions is an anonymous posting space where campus students can share thoughts, feelings, or light-hearted messages. All posts are anonymous — your name is never shown.",
+        a: "Confessions is an anonymous posting space where campus students can share thoughts, feelings, or light-hearted messages. All posts are anonymous - your name is never shown.",
       },
       {
         q: "Can confessions be reported?",
@@ -116,7 +116,7 @@ const sections: Section[] = [
       },
       {
         q: "Is this available to everyone?",
-        a: "No — this feature is restricted to users who are 18 or older, as verified by their date of birth during onboarding.",
+        a: "No - this feature is restricted to users who are 18 or older, as verified by their date of birth during onboarding.",
       },
     ],
   },
@@ -165,10 +165,10 @@ const sections: Section[] = [
 function FAQItem({ faq }: { faq: FAQ }) {
   const [open, setOpen] = useState(false)
   return (
-    <div className={`border border-border rounded-xl overflow-hidden transition-all duration-200`}>
+    <div className={`transition-all duration-200 border-b border-border/50`}>
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between gap-3 px-4 py-3.5 text-left hover:bg-muted/40 transition-colors"
+        className="w-full flex items-center justify-between gap-3 py-3.5 text-left hover:text-primary transition-colors"
       >
         <span className="text-sm font-semibold leading-snug">{faq.q}</span>
         {open
@@ -176,8 +176,8 @@ function FAQItem({ faq }: { faq: FAQ }) {
           : <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />}
       </button>
       {open && (
-        <div className="px-4 pb-4 border-t border-border bg-muted/20">
-          <p className="text-sm text-muted-foreground leading-relaxed pt-3">{faq.a}</p>
+        <div className="pb-4">
+          <p className="text-sm text-muted-foreground leading-relaxed">{faq.a}</p>
         </div>
       )}
     </div>
@@ -187,31 +187,26 @@ function FAQItem({ faq }: { faq: FAQ }) {
 export default function HelpPage() {
   return (
     <div className="flex flex-col h-full min-h-0 overflow-y-auto">
-      <div className="flex-1 p-6">
-        <div className="w-full max-w-2xl mx-auto space-y-5">
+      <div className="flex-1 p-6 md:p-12">
+        <div className="w-full max-w-2xl mx-auto space-y-12">
 
-          {/* Header card */}
-          <div className="rounded-2xl border border-border overflow-hidden">
-            <div className="bg-muted/30 p-6 border-b border-border flex items-center gap-3">
-              <Link
-                href="/settings"
-                className="h-9 w-9 rounded-xl border border-border bg-background flex items-center justify-center hover:bg-muted transition-colors flex-shrink-0"
-              >
-                <ArrowLeft className="h-4 w-4 text-muted-foreground" />
-              </Link>
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl flex items-center justify-center">
-                  <HelpCircle className="h-5 w-5 text-emerald-500" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold">Help &amp; Support</h2>
-                  <p className="text-sm text-muted-foreground">Everything you need to know about Kinder.</p>
-                </div>
-              </div>
+          {/* Header */}
+          <div className="space-y-6">
+            <Link
+              href="/settings"
+              className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4" /> Back to Settings
+            </Link>
+            
+            <div className="space-y-4">
+              <HelpCircle className="h-10 w-10 text-emerald-500 mb-2" />
+              <h2 className="text-3xl font-extrabold tracking-tight">Help &amp; Support</h2>
+              <p className="text-sm text-muted-foreground">Everything you need to know about Kinder.</p>
             </div>
 
-            <div className="p-6">
-              <p className="text-sm text-muted-foreground leading-relaxed">
+            <div className="text-sm text-muted-foreground leading-relaxed pt-2">
+              <p>
                 Browse the sections below to find answers. Can't find what you're looking for?{" "}
                 <Link href="/settings/contact" className="text-primary font-semibold hover:underline">
                   Contact us
@@ -222,37 +217,39 @@ export default function HelpPage() {
           </div>
 
           {/* FAQ Sections */}
-          {sections.map((section) => {
-            const Icon = section.icon
-            return (
-              <div key={section.title} className="rounded-2xl border border-border overflow-hidden">
-                <div className="flex items-center gap-3 px-6 pt-5 pb-3">
-                  <div className={`h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0`}>
-                    <Icon className={`h-4 w-4 ${section.color}`} />
+          <div className="space-y-12">
+            {sections.map((section) => {
+              const Icon = section.icon
+              return (
+                <div key={section.title} className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <Icon className={`h-6 w-6 ${section.color}`} />
+                    <h3 className="font-bold text-xl">{section.title}</h3>
                   </div>
-                  <h3 className="font-bold text-sm">{section.title}</h3>
+                  <div className="space-y-1">
+                    {section.faqs.map((faq, i) => (
+                      <FAQItem key={i} faq={faq} />
+                    ))}
+                  </div>
                 </div>
-                <div className="px-6 pb-6 space-y-2">
-                  {section.faqs.map((faq, i) => (
-                    <FAQItem key={i} faq={faq} />
-                  ))}
-                </div>
-              </div>
-            )
-          })}
+              )
+            })}
+          </div>
 
           {/* Still need help */}
-          <div className="rounded-2xl border border-border p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <div className="flex-1">
-              <p className="font-semibold text-sm">Still need help?</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Our team is happy to assist you with anything not covered here.</p>
+          <div className="pt-8">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              <div className="flex-1">
+                <p className="font-bold text-lg">Still need help?</p>
+                <p className="text-sm text-muted-foreground mt-1">Our team is happy to assist you with anything not covered here.</p>
+              </div>
+              <Link
+                href="/settings/contact"
+                className="inline-flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 active:scale-95 flex-shrink-0"
+              >
+                Contact Us
+              </Link>
             </div>
-            <Link
-              href="/settings/contact"
-              className="inline-flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 active:scale-95 flex-shrink-0"
-            >
-              Contact Us
-            </Link>
           </div>
 
         </div>

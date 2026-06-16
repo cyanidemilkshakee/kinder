@@ -189,7 +189,7 @@ export default function OnboardingPage() {
         </div>
 
         {/* Card */}
-        <div className="rounded-2xl border border-border/60 bg-card/80 p-8 shadow-2xl backdrop-blur-xl">
+        <div className="rounded-2xl border border-border/60 bg-background/80 p-8 shadow-2xl backdrop-blur-xl">
           <div className="mb-6 flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
               <StepIcon className="h-5 w-5 text-primary" />

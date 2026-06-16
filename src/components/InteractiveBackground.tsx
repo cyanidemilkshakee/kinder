@@ -5,7 +5,7 @@ import React from "react"
 
 type Variant = "auth" | "home" | "chat" | "likes" | "profile" | "confessions" | "default"
 
-// Per-variant accent colours (zinc/stone/violet/gold palette — no blues)
+// Per-variant accent colours (zinc/stone/violet/gold palette - no blues)
 const VARIANT_STYLES: Record<Variant, { orb1: string; orb2: string; orb3: string }> = {
   auth:        { orb1: "bg-violet-500/15",  orb2: "bg-stone-400/10",    orb3: "bg-violet-700/10"  },
   home:        { orb1: "bg-amber-400/15",   orb2: "bg-violet-500/10",   orb3: "bg-stone-400/10"   },

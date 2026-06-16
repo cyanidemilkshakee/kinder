@@ -102,7 +102,7 @@ export function ChatSidebar() {
   }
 
   return (
-    <div className="w-72 border-r border-border bg-card/60 flex flex-col h-full flex-shrink-0">
+    <div className="w-72 border-r border-border bg-transparent flex flex-col h-full flex-shrink-0">
       <div className="p-4 border-b border-border">
         <div className="flex items-center gap-2">
           <MessageCircle className="h-5 w-5 text-primary" />

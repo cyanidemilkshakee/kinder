@@ -140,7 +140,7 @@ export default function LikesPage() {
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
-      <div className="w-full px-6 pt-6">
+      <div className="w-full max-w-4xl mx-auto px-6 pt-6">
 
         {/* Page Header */}
         <div className="flex items-center gap-3 mb-6 px-1">
@@ -165,7 +165,7 @@ export default function LikesPage() {
               </div>
               <h3 className="text-xl font-bold text-foreground">No likes yet</h3>
               <p className="text-sm text-muted-foreground mt-2 max-w-xs leading-relaxed">
-                Keep swiping on Discover — when someone likes you, they'll appear here.
+                Keep swiping on Discover - when someone likes you, they'll appear here.
               </p>
               <Button
                 className="mt-6 rounded-xl px-8"

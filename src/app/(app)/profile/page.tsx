@@ -183,21 +183,21 @@ export default function ProfilePage() {
 
   return (
     <div className="flex flex-col h-full min-h-0 overflow-y-auto">
-      <div className="flex-1 p-6">
-      <div className="w-full max-w-2xl mx-auto rounded-2xl border border-border overflow-hidden">
+      <div className="flex-1 p-6 md:p-12">
+      <div className="w-full max-w-2xl mx-auto space-y-12">
         
         {/* Header */}
-        <div className="bg-muted/30 p-6 border-b border-border flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl flex items-center justify-center">
-            <User className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold">Edit Profile</h2>
-            <p className="text-sm text-muted-foreground">Manage your campus identity and how others see you.</p>
+        <div className="space-y-6">
+          <div className="flex items-center gap-4">
+            <User className="h-10 w-10 text-primary mb-2" />
+            <div>
+              <h2 className="text-3xl font-extrabold tracking-tight">Edit Profile</h2>
+              <p className="text-sm text-muted-foreground pt-2">Manage your campus identity and how others see you.</p>
+            </div>
           </div>
         </div>
 
-        <div className="p-6 md:p-8">
+        <div className="pt-4">
           {/* Avatar Upload */}
           <div className="flex flex-col items-center mb-10">
             <div className="relative group">
@@ -238,7 +238,7 @@ export default function ProfilePage() {
           <form onSubmit={handleSave} className="space-y-8">
             {/* Basics */}
             <div className="space-y-4">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground border-b pb-2">Basics</h3>
+              <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground border-b border-border/50 pb-2">Basics</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="space-y-1.5">
                   <label className="text-sm font-semibold">Real Name</label>
@@ -270,7 +270,7 @@ export default function ProfilePage() {
 
             {/* Academics */}
             <div className="space-y-4">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground border-b pb-2">Academics</h3>
+              <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground border-b border-border/50 pb-2">Academics</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="space-y-1.5">
                   <label className="text-sm font-semibold">Department</label>
@@ -302,7 +302,7 @@ export default function ProfilePage() {
 
             {/* About You */}
             <div className="space-y-4">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground border-b pb-2">About You</h3>
+              <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground border-b border-border/50 pb-2">About You</h3>
               
               <div className="space-y-1.5">
                 <label className="text-sm font-semibold">Bio</label>
@@ -375,7 +375,7 @@ export default function ProfilePage() {
 
               <div className="space-y-2 pt-2">
                 <label className="text-sm font-semibold block">Relationship Intent</label>
-                <p className="text-[11px] text-muted-foreground">Select all that apply — at least one required.</p>
+                <p className="text-[11px] text-muted-foreground">Select all that apply - at least one required.</p>
                 <div className="flex flex-wrap gap-2 pt-1">
                   {([
                     { value: "friendship", emoji: "🤝", label: "Friendship" },

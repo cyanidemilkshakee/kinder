@@ -78,7 +78,7 @@ export default function AdminReportsPage() {
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       ) : reports.length === 0 ? (
-        <div className="bg-card border border-border rounded-xl p-12 text-center text-muted-foreground">
+        <div className="p-12 text-center text-muted-foreground">
           No reports found.
         </div>
       ) : (
@@ -88,7 +88,7 @@ export default function AdminReportsPage() {
             const isTempBanned = r.reported?.ban_expires_at && new Date(r.reported.ban_expires_at) > new Date()
 
             return (
-              <div key={r.id} className={`bg-card border rounded-xl p-5 shadow-sm ${r.status !== 'pending' ? 'opacity-60 border-border' : 'border-destructive/30'}`}>
+              <div key={r.id} className={`border-b py-5 ${r.status !== 'pending' ? 'opacity-60 border-border/50' : 'border-destructive/30'}`}>
                 <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">

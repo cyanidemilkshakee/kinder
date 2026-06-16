@@ -50,6 +50,7 @@ export default function DiscoverPage() {
   const [currentUserHookupOpt, setCurrentUserHookupOpt] = useState(false)
   const [superLikesLeft, setSuperLikesLeft] = useState(3)
   const [swipingId, setSwipingId] = useState<string | null>(null)
+  const [swipeDirection, setSwipeDirection] = useState<"left" | "right" | null>(null)
   const [matchModal, setMatchModal] = useState<MatchModal>({ open: false, matchedUser: null, matchId: null })
   const [reportModal, setReportModal] = useState<ReportModal>({ open: false, targetId: null, targetName: "" })
   const [reportReason, setReportReason] = useState("")
@@ -160,9 +161,11 @@ export default function DiscoverPage() {
     const current = profiles[0]
 
     setSwipingId(current.id)
+    setSwipeDirection(isRight ? "right" : "left")
     // Let animation play
     await new Promise(r => setTimeout(r, 350))
     setSwipingId(null)
+    setSwipeDirection(null)
     setProfiles(prev => prev.slice(1))
 
     if (isSuperLike) {
@@ -252,130 +255,134 @@ export default function DiscoverPage() {
   }
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto p-6">
-      <div className="w-full">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4 px-1">
-          <h1 className="text-2xl font-extrabold tracking-tight">Discover</h1>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/60 px-3 py-1.5 rounded-full">
-            <Star className="h-3.5 w-3.5 text-yellow-500" />
-            <span>{superLikesLeft} super likes left</span>
-          </div>
+    <div className="flex flex-col h-full overflow-hidden p-6 relative">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-2xl font-extrabold tracking-tight">Discover</h1>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/60 px-3 py-1.5 rounded-full">
+          <Star className="h-3.5 w-3.5 text-yellow-500" />
+          <span>{superLikesLeft} super likes left</span>
         </div>
+      </div>
 
+      <div className="flex-1 flex flex-col items-center justify-center relative overflow-hidden">
         {profiles.length > 0 ? (
           <>
-            {/* Stack indicator */}
-            {profiles.length > 1 && (
-              <div className="relative h-2 mb-[-8px]">
-                <div className="absolute inset-x-4 top-0 h-full rounded-t-2xl border border-border/40" />
-              </div>
-            )}
-
-            {/* Card */}
-            <div
-              className={`relative rounded-2xl border border-border overflow-hidden transition-all duration-350 ${
-                swipingId === current.id
-                  ? "opacity-0 scale-95"
-                  : "opacity-100 scale-100"
-              }`}
-            >
-              {/* Avatar */}
-              <div className="relative h-80 bg-gradient-to-br from-primary/20 to-secondary/20">
-                <img
-                  src={avatar}
-                  alt={current.real_name}
-                  className="w-full h-full object-cover"
-                />
-                {/* Report button */}
+            <div className="w-full max-w-4xl flex items-center justify-center gap-4 sm:gap-12">
+              
+              {/* LEFT BUTTONS (Pass & Report) */}
+              <div className="flex flex-col items-center gap-4 sm:gap-6">
+                <button
+                  onClick={() => handleSwipe(false)}
+                  className="flex h-16 w-16 sm:h-24 sm:w-24 items-center justify-center rounded-full border-2 border-destructive text-destructive hover:bg-destructive/10 transition-transform hover:scale-110 active:scale-95"
+                  title="Pass"
+                >
+                  <X className="h-8 w-8 sm:h-12 sm:w-12" />
+                </button>
                 <button
                   onClick={() => setReportModal({ open: true, targetId: current.id, targetName: current.real_name })}
-                  className="absolute top-3 right-3 h-8 w-8 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center border border-border/50 hover:bg-destructive/10 transition-colors"
+                  className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full border border-border text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-transform hover:scale-110 active:scale-95"
                   title="Report user"
                 >
-                  <Flag className="h-3.5 w-3.5 text-muted-foreground" />
+                  <Flag className="h-4 w-4 sm:h-5 sm:w-5" />
                 </button>
-                {/* Intent badge(s) */}
-                <div className="absolute bottom-3 left-3">
-                  <span className="text-xs font-semibold bg-background/80 backdrop-blur-sm border border-border/50 rounded-full px-3 py-1">
+              </div>
+
+              {/* CENTER PROFILE (9:16 aspect ratio) */}
+              <div
+                className={`relative w-full max-w-[320px] sm:max-w-[360px] aspect-[9/16] overflow-hidden rounded-2xl bg-muted/30 border border-border/50 shadow-2xl transition-all duration-350 ${
+                  swipingId === current.id
+                    ? swipeDirection === "right"
+                      ? "animate-swipe-right"
+                      : "animate-swipe-left"
+                    : "opacity-100 scale-100"
+                }`}
+              >
+                {/* Profile Photo as Background */}
+                <div className="absolute inset-0">
+                  <img
+                    src={avatar}
+                    alt={current.real_name}
+                    className="w-full h-full object-cover"
+                  />
+                  {/* Gradient overlay for text legibility */}
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/80" />
+                </div>
+
+                {/* Intent badge top left */}
+                <div className="absolute top-4 left-4 z-10">
+                  <span className="text-xs font-semibold bg-background/80 text-foreground backdrop-blur-md rounded-full px-3 py-1">
                     {intentBadges(current)}
                   </span>
                 </div>
-              </div>
 
-              {/* Info */}
-              <div className="p-5">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h2 className="text-xl font-bold">{current.real_name}</h2>
-                    <p className="text-sm text-muted-foreground mt-0.5">
+                {/* Info Bottom */}
+                <div className="absolute bottom-0 inset-x-0 p-6 z-10 text-white">
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-2xl font-bold leading-none">{current.real_name}</h2>
+                      <span className="text-xs font-medium bg-white/20 px-2 py-0.5 rounded-full backdrop-blur-md">
+                        {current.gender}
+                      </span>
+                    </div>
+                    <p className="text-sm text-white/80">
                       {current.department} · {current.year} Year
                     </p>
                   </div>
-                  <span className="text-xs font-medium bg-muted px-2.5 py-1 rounded-full">
-                    {current.gender}
-                  </span>
-                </div>
 
-                {current.bio && (
-                  <p className="mt-3 text-sm text-foreground/80 line-clamp-2">{current.bio}</p>
-                )}
+                  {current.bio && (
+                    <p className="mt-3 text-sm text-white/90 line-clamp-3">{current.bio}</p>
+                  )}
 
-                {current.interest_tags && current.interest_tags.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {current.interest_tags.slice(0, 5).map(tag => (
-                      <span key={tag} className="text-xs bg-primary/10 text-primary border border-primary/20 rounded-full px-2.5 py-0.5 font-semibold">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                {/* Actions */}
-                <div className="flex items-center gap-3 mt-5">
-                  <button
-                    onClick={() => handleSwipe(false)}
-                    className="flex-1 flex items-center justify-center gap-2 rounded-xl border-2 border-destructive/30 bg-destructive/5 py-3 text-destructive font-semibold text-sm hover:bg-destructive/10 transition-all hover:scale-105 active:scale-95"
-                  >
-                    <X className="h-4 w-4" /> Pass
-                  </button>
-
-                  <button
-                    onClick={() => handleSwipe(true, true)}
-                    disabled={superLikesLeft <= 0}
-                    className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full border-2 transition-all hover:scale-110 active:scale-95 ${
-                      superLikesLeft > 0
-                        ? "border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary"
-                        : "border-border bg-muted text-muted-foreground cursor-not-allowed"
-                    }`}
-                    title={`Super like (${superLikesLeft} left today)`}
-                  >
-                    <Star className="h-4 w-4" />
-                  </button>
-
-                  <button
-                    onClick={() => handleSwipe(true)}
-                    className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-primary py-3 text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-all hover:scale-105 active:scale-95"
-                  >
-                    <Heart className="h-4 w-4" /> Like
-                  </button>
+                  {current.interest_tags && current.interest_tags.length > 0 && (
+                    <div className="mt-4 flex flex-wrap gap-1.5">
+                      {current.interest_tags.slice(0, 5).map(tag => (
+                        <span key={tag} className="text-xs bg-black/40 border border-white/20 rounded-full px-2.5 py-1 font-medium backdrop-blur-md">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
+
+              {/* RIGHT BUTTONS (Like & Super Like) */}
+              <div className="flex flex-col items-center gap-4 sm:gap-6">
+                <button
+                  onClick={() => handleSwipe(true)}
+                  className="flex h-16 w-16 sm:h-24 sm:w-24 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-transform hover:scale-110 active:scale-95 shadow-xl shadow-primary/20"
+                  title="Like"
+                >
+                  <Heart className="h-8 w-8 sm:h-12 sm:w-12" />
+                </button>
+                <button
+                  onClick={() => handleSwipe(true, true)}
+                  disabled={superLikesLeft <= 0}
+                  className={`flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full border-2 transition-transform ${
+                    superLikesLeft > 0
+                      ? "border-primary/40 bg-primary/10 text-primary hover:scale-110 active:scale-95 hover:bg-primary/20"
+                      : "border-border bg-muted text-muted-foreground cursor-not-allowed opacity-50"
+                  }`}
+                  title={`Super like (${superLikesLeft} left today)`}
+                >
+                  <Star className="h-4 w-4 sm:h-5 sm:w-5" />
+                </button>
+              </div>
+
             </div>
 
             {/* Remaining count */}
-            <p className="text-center text-xs text-muted-foreground mt-3">
+            <p className="text-center text-xs text-muted-foreground mt-6">
               {profiles.length} {profiles.length === 1 ? "profile" : "profiles"} remaining
             </p>
           </>
         ) : (
-          <div className="flex flex-col items-center justify-center text-center p-8 rounded-2xl border border-border mt-4">
+          <div className="flex flex-col items-center justify-center text-center p-8 mt-4">
             <div className="h-16 w-16 rounded-full flex items-center justify-center mb-4">
               <Heart className="h-8 w-8 text-primary" />
             </div>
             <h3 className="text-lg font-bold">You've seen everyone!</h3>
             <p className="mt-2 text-sm text-muted-foreground max-w-xs">
-              No more new profiles right now. Check back later — new students join every day.
+              No more new profiles right now. Check back later - new students join every day.
             </p>
             <Button className="mt-5 rounded-xl" onClick={fetchProfiles}>
               Refresh Feed
@@ -387,7 +394,7 @@ export default function DiscoverPage() {
       {/* ── MATCH MODAL ── */}
       {matchModal.open && matchModal.matchedUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="animate-match-pop w-full max-w-sm rounded-3xl border border-border overflow-hidden">
+          <div className="animate-match-pop w-full max-w-sm overflow-hidden bg-background border border-border rounded-xl">
             {/* Gradient header */}
             <div className="relative bg-gradient-to-br from-primary/25 via-secondary/15 to-primary/10 p-8 pb-4 flex flex-col items-center">
               {/* Pulse ring */}
@@ -432,7 +439,7 @@ export default function DiscoverPage() {
       {/* ── REPORT MODAL ── */}
       {reportModal.open && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-2xl border border-border overflow-hidden">
+          <div className="w-full max-w-sm overflow-hidden bg-background border border-border rounded-xl">
             <div className="p-5 border-b border-border">
               <h3 className="font-bold text-lg">Report {reportModal.targetName}</h3>
               <p className="text-sm text-muted-foreground mt-1">
@@ -477,12 +484,12 @@ export default function DiscoverPage() {
 
       {/* ── TOAST ── */}
       {toast && (
-        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-toast flex items-center gap-2 px-5 py-3 rounded-2xl text-sm font-medium max-w-xs text-center ${
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-toast flex items-center gap-2 px-5 py-3 rounded-2xl text-sm font-medium max-w-xs text-center border ${
           toast.type === "success"
-            ? "bg-primary text-primary-foreground"
+            ? "bg-primary text-primary-foreground border-primary/50"
             : toast.type === "error"
-            ? "bg-destructive text-white"
-            : "bg-card border border-border text-foreground"
+            ? "bg-destructive text-white border-destructive/50"
+            : "bg-background border-border text-foreground"
         }`}>
           {toast.msg}
         </div>

@@ -57,7 +57,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-background text-foreground">
       {/* Admin Sidebar */}
-      <div className="w-full md:w-64 bg-card border-r border-border p-6 flex flex-col gap-6">
+      <div className="w-full md:w-64 bg-transparent border-r border-border p-6 flex flex-col gap-6">
         <div className="flex items-center gap-3 text-primary">
           <ShieldAlert className="h-6 w-6" />
           <h1 className="text-xl font-bold tracking-tight">Admin</h1>

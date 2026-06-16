@@ -55,13 +55,13 @@ export default function AdminConfessionsPage() {
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       ) : confessions.length === 0 ? (
-        <div className="bg-card border border-border rounded-xl p-12 text-center text-muted-foreground">
+        <div className="p-12 text-center text-muted-foreground">
           No pending confessions to review.
         </div>
       ) : (
         <div className="grid gap-4">
           {confessions.map(c => (
-            <div key={c.id} className="bg-card border border-border rounded-xl p-5 shadow-sm flex flex-col sm:flex-row gap-5 items-start sm:items-center justify-between">
+            <div key={c.id} className="border-b border-border/50 py-5 flex flex-col sm:flex-row gap-5 items-start sm:items-center justify-between">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-xs font-semibold px-2 py-1 bg-muted rounded-md text-muted-foreground">

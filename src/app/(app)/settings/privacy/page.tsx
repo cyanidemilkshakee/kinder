@@ -69,7 +69,7 @@ const policySections: PolicySection[] = [
       <ul className="list-disc list-inside space-y-2">
         <li>Your profile is visible to other verified college students who are logged into Kinder.</li>
         <li>Only mutual matches can start a conversation with you.</li>
-        <li>Confessions are posted anonymously — your name is never attached to a confession publicly.</li>
+        <li>Confessions are posted anonymously - your name is never attached to a confession publicly.</li>
         <li>Platform administrators (the developer) can access profile data for moderation and support purposes only.</li>
       </ul>
     ),
@@ -102,7 +102,7 @@ const policySections: PolicySection[] = [
     content: (
       <ul className="list-disc list-inside space-y-2">
         <li><strong>Supabase:</strong> Database, authentication, and storage provider. Subject to Supabase's own Privacy Policy.</li>
-        <li><strong>DiceBear (api.dicebear.com):</strong> Used to generate default avatar images based on your user ID. No personal data is sent — only a random seed is used.</li>
+        <li><strong>DiceBear (api.dicebear.com):</strong> Used to generate default avatar images based on your user ID. No personal data is sent - only a random seed is used.</li>
         <li>We do not use Google Analytics, Meta Pixel, or any other advertising trackers.</li>
       </ul>
     ),
@@ -147,43 +147,38 @@ const policySections: PolicySection[] = [
 export default function PrivacyPolicyPage() {
   return (
     <div className="flex flex-col h-full min-h-0 overflow-y-auto">
-      <div className="flex-1 p-6">
-        <div className="w-full max-w-2xl mx-auto space-y-5">
+      <div className="flex-1 p-6 md:p-12">
+        <div className="w-full max-w-2xl mx-auto space-y-12">
 
           {/* Header */}
-          <div className="rounded-2xl border border-border overflow-hidden">
-            <div className="bg-muted/30 p-6 border-b border-border flex items-center gap-3">
-              <Link
-                href="/settings"
-                className="h-9 w-9 rounded-xl border border-border bg-background flex items-center justify-center hover:bg-muted transition-colors flex-shrink-0"
-              >
-                <ArrowLeft className="h-4 w-4 text-muted-foreground" />
-              </Link>
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl flex items-center justify-center">
-                  <FileText className="h-5 w-5 text-violet-500" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold">Privacy Policy</h2>
-                  <p className="text-sm text-muted-foreground">Last updated: {LAST_UPDATED}</p>
-                </div>
-              </div>
+          <div className="space-y-6">
+            <Link
+              href="/settings"
+              className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4" /> Back to Settings
+            </Link>
+            
+            <div className="space-y-4">
+              <FileText className="h-10 w-10 text-violet-500 mb-2" />
+              <h2 className="text-3xl font-extrabold tracking-tight">Privacy Policy</h2>
+              <p className="text-sm text-muted-foreground">Last updated: {LAST_UPDATED}</p>
             </div>
 
-            <div className="p-6">
-              <div className="bg-primary/5 border border-primary/15 rounded-xl p-4 text-sm text-muted-foreground leading-relaxed">
+            <div className="text-sm text-muted-foreground leading-relaxed pt-2">
+              <p>
                 This Privacy Policy describes how Kinder collects, uses, and protects
                 your personal information. By using Kinder, you agree to the practices described below.
                 Please read this carefully.
-              </div>
+              </p>
             </div>
           </div>
 
           {/* Policy sections */}
-          <div className="rounded-2xl border border-border overflow-hidden divide-y divide-border">
+          <div className="space-y-10">
             {policySections.map((section) => (
-              <div key={section.title} className="p-6">
-                <h3 className="font-bold text-sm mb-3">{section.title}</h3>
+              <div key={section.title} className="space-y-3">
+                <h3 className="font-bold text-lg">{section.title}</h3>
                 <div className="text-sm text-muted-foreground leading-relaxed space-y-2">
                   {section.content}
                 </div>
@@ -192,7 +187,7 @@ export default function PrivacyPolicyPage() {
           </div>
 
           {/* Footer */}
-          <div className="text-center pb-4">
+          <div className="pt-8">
             <p className="text-xs text-muted-foreground">
               Kinder · Campus-exclusive · Not affiliated with college administration
             </p>

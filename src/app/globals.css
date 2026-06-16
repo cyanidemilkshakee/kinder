@@ -37,8 +37,6 @@
   --color-primary: var(--primary);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -51,54 +49,50 @@
 /* ── LIGHT MODE ── Dusky Rose Petal + Evergreen Shade palette */
 :root {
   --background: #FDF7F7;
-  --foreground: #1B2631;
-  --card: #FFFFFF;
-  --card-foreground: #1B2631;
+  --foreground: #111111;
   --popover: #FFFFFF;
-  --popover-foreground: #1B2631;
-  --primary: #6F42C1;           /* Royal Amethyst */
-  --primary-foreground: #ffffff;
+  --popover-foreground: #111111;
+  --primary: #FFD700;           /* Radiant Goldflare */
+  --primary-foreground: #1A1A1A;
   --secondary: #DFA7A8;          /* Dusky Rose Petal */
-  --secondary-foreground: #1B2631;
+  --secondary-foreground: #111111;
   --muted: #EBC2C3;              /* Dusky Rose Light */
-  --muted-foreground: #A46F70;   /* Dusky Rose Dark */
+  --muted-foreground: #666666;   /* Neutral Grey */
   --accent: #2E4E3F;             /* Evergreen Shade */
   --accent-foreground: #ffffff;
   --destructive: #e53e3e;
   --border: #EBC2C3;
   --input: #EBC2C3;
-  --ring: #6F42C1;
+  --ring: #FFD700;
   --radius: 0.75rem;
-  --chart-1: #6F42C1;
+  --chart-1: #FFD700;
   --chart-2: #DFA7A8;
   --chart-3: #2E4E3F;
   --chart-4: #EBC2C3;
   --chart-5: #A46F70;
-  /* Sidebar — Coral Sunset (light) */
-  --sidebar: #FF9C9C;
-  --sidebar-foreground: #000000;
-  --sidebar-primary: #FFD700;    /* Goldflare — active/primary accent */
-  --sidebar-primary-foreground: #1B2631;
-  --sidebar-accent: #FFB5B5;     /* Lighter coral for hover */
-  --sidebar-accent-foreground: #000000;
-  --sidebar-border: rgba(0,0,0,0.10);
+  /* Sidebar - Coral Sunset (light) */
+  --sidebar: #B23C3C;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #FFD700;    /* Goldflare - active/primary accent */
+  --sidebar-primary-foreground: #111111;
+  --sidebar-accent: #C94D4D;     /* Mid-coral for hover */
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgba(255,255,255,0.15);
   --sidebar-ring: #FFD700;
 }
 
 /* ── DARK MODE ── Charcoal Grey palette */
 .dark {
-  --background: #1A1A1A;         /* Deep Charcoal */
-  --foreground: #ECF0F1;
-  --card: #373737;               /* Charcoal Surface */
-  --card-foreground: #ECF0F1;
+  --background: #000000;         /* Solid Black */
+  --foreground: #F5F5F5;
   --popover: #2D2D2D;
-  --popover-foreground: #ECF0F1;
+  --popover-foreground: #F5F5F5;
   --primary: #FFD700;            /* Radiant Goldflare */
   --primary-foreground: #1A1A1A;
   --secondary: #C8A2C8;          /* Orchid Mist */
   --secondary-foreground: #1A1A1A;
   --muted: #2D2D2D;
-  --muted-foreground: #888888;
+  --muted-foreground: #A0A0A0;
   --accent: #C8A2C8;
   --accent-foreground: #1A1A1A;
   --destructive: #ff5555;
@@ -110,11 +104,11 @@
   --chart-3: #555555;
   --chart-4: #373737;
   --chart-5: #ECF0F1;
-  /* Sidebar — Coral Sunset (dark) */
+  /* Sidebar - Coral Sunset (dark) */
   --sidebar: #B23C3C;
   --sidebar-foreground: #ffffff;
-  --sidebar-primary: #FFD700;    /* Goldflare — active/primary accent */
-  --sidebar-primary-foreground: #1B2631;
+  --sidebar-primary: #FFD700;    /* Goldflare - active/primary accent */
+  --sidebar-primary-foreground: #111111;
   --sidebar-accent: #C94D4D;     /* Mid-coral for hover */
   --sidebar-accent-foreground: #ffffff;
   --sidebar-border: rgba(255,255,255,0.15);
