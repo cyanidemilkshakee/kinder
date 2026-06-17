@@ -6,6 +6,7 @@ import { createClient } from "@/lib/client"
 import { Button } from "@/components/ui/button"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Loader2 } from "lucide-react"
+import { isValidUsername, normalizeUsername, usernameGuidance } from "@/lib/username"
 
 function GoogleIcon() {
   return (
@@ -23,6 +24,7 @@ function GoogleIcon() {
 function AuthForm() {
   const [view, setView] = useState<"login" | "signup" | "forgot">("login")
   const [email, setEmail] = useState("")
+  const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const [checkingSession, setCheckingSession] = useState(true)
@@ -38,7 +40,17 @@ function AuthForm() {
     const checkSession = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
-        router.replace('/discover')
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('real_name, username')
+          .eq('id', user.id)
+          .maybeSingle()
+
+        if (!profile?.real_name || !profile?.username) {
+          router.replace('/onboarding')
+        } else {
+          router.replace('/discover')
+        }
       } else {
         setCheckingSession(false)
       }
@@ -56,20 +68,77 @@ function AuthForm() {
     return lowerEmail.endsWith("@bmsce.ac.in")
   }
 
+  const resolveLoginEmail = async (identifier: string) => {
+    const value = identifier.trim()
+
+    if (value.includes("@")) {
+      if (!isValidEmail(value)) {
+        throw new Error("Please use your institutional email (@college.edu)")
+      }
+      return value
+    }
+
+    const loginUsername = normalizeUsername(value)
+    if (!isValidUsername(loginUsername)) {
+      throw new Error(usernameGuidance(loginUsername) || "Enter a valid username.")
+    }
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("email")
+      .eq("username", loginUsername)
+      .maybeSingle()
+
+    if (error) throw error
+    if (!data?.email) throw new Error("No account found for that username.")
+
+    return data.email
+  }
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
     setMsg("")
 
-    if (!isValidEmail(email)) {
+    const authEmail = email.trim()
+    const signupUsername = normalizeUsername(username)
+
+    if ((view === "signup" || view === "forgot") && !isValidEmail(authEmail)) {
       setError("Please use your institutional email (@college.edu)")
+      return
+    }
+
+    if (view === "signup" && !isValidUsername(signupUsername)) {
+      setError(usernameGuidance(signupUsername) || "Enter a valid username.")
       return
     }
 
     setLoading(true)
 
     if (view === "signup") {
-      const { data: authData, error: authError } = await supabase.auth.signUp({ email, password })
+      const { data: existingUsername, error: usernameError } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("username", signupUsername)
+        .maybeSingle()
+
+      if (usernameError) {
+        setError(usernameError.message)
+        setLoading(false)
+        return
+      }
+
+      if (existingUsername) {
+        setError("That username is already taken.")
+        setLoading(false)
+        return
+      }
+
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: authEmail,
+        password,
+        options: { data: { username: signupUsername, has_password: true } },
+      })
       if (authError) {
         setError(authError.message)
       } else if (authData.user) {
@@ -77,24 +146,33 @@ function AuthForm() {
         setView("login")
       }
     } else if (view === "login") {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+      let loginEmail = ""
+      try {
+        loginEmail = await resolveLoginEmail(authEmail)
+      } catch (err: any) {
+        setError(err?.message || "Unable to resolve that username.")
+        setLoading(false)
+        return
+      }
+
+      const { data, error } = await supabase.auth.signInWithPassword({ email: loginEmail, password })
       if (error) {
         setError(error.message)
       } else {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('real_name')
+          .select('real_name, username')
           .eq('id', data.user?.id)
           .single()
 
-        if (!profile || !profile.real_name) {
+        if (!profile || !profile.real_name || !profile.username) {
           router.push('/onboarding')
         } else {
           router.push('/discover')
         }
       }
     } else if (view === "forgot") {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      const { error } = await supabase.auth.resetPasswordForEmail(authEmail, {
         redirectTo: `${window.location.origin}/reset-password`,
       })
       if (error) {
@@ -185,19 +263,43 @@ function AuthForm() {
           <form onSubmit={handleAuth} className="space-y-4">
             <div className="space-y-1.5">
               <label htmlFor="email" className="block text-sm font-medium">
-                Institutional Email
+                {view === "login" ? "Email or Username" : "Institutional Email"}
               </label>
               <input
                 id="email"
                 name="email"
-                type="email"
+                type={view === "login" ? "text" : "email"}
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="your.name@college.edu"
+                placeholder={view === "login" ? "your.name@college.edu or username" : "your.name@college.edu"}
                 className="block w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"
               />
             </div>
+
+            {view === "signup" && (
+              <div className="space-y-1.5">
+                <label htmlFor="username" className="block text-sm font-medium">
+                  Username
+                </label>
+                <div className="flex rounded-xl border border-input bg-background focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/30 transition-all">
+                  <span className="flex items-center pl-4 text-sm text-muted-foreground">@</span>
+                  <input
+                    id="username"
+                    name="username"
+                    type="text"
+                    required
+                    value={username}
+                    onChange={(e) => setUsername(normalizeUsername(e.target.value))}
+                    placeholder="your_username"
+                    className="block w-full rounded-xl bg-transparent px-1 py-2.5 pr-4 text-sm placeholder:text-muted-foreground focus:outline-none"
+                    minLength={3}
+                    maxLength={20}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">3-20 lowercase letters, numbers, or underscores.</p>
+              </div>
+            )}
 
             {view !== "forgot" && (
               <div className="space-y-1.5">

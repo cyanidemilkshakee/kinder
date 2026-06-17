@@ -10,6 +10,7 @@ type Confession = {
   id: string
   content: string
   receiver_email: string
+  receiver_username: string | null
   status: string
   created_at: string
 }
@@ -65,7 +66,7 @@ export default function AdminConfessionsPage() {
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-xs font-semibold px-2 py-1 bg-muted rounded-md text-muted-foreground">
-                    To: {c.receiver_email}
+                    To: {c.receiver_username ? `@${c.receiver_username}` : c.receiver_email}
                   </span>
                   <span className="text-xs text-muted-foreground">
                     {new Date(c.created_at).toLocaleString()}

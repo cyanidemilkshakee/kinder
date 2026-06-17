@@ -9,6 +9,7 @@ import { X, Heart, Star, Flag, Loader2 } from "lucide-react"
 
 type Profile = {
   id: string
+  username: string
   real_name: string
   department: string
   year: string
@@ -17,6 +18,7 @@ type Profile = {
   relationship_intent: string
   relationship_intents: string[] | null
   avatar_url: string | null
+  photos: string[] | null
   interest_tags: string[] | null
 }
 
@@ -56,6 +58,7 @@ export default function DiscoverPage() {
   const [reportReason, setReportReason] = useState("")
   const [reportLoading, setReportLoading] = useState(false)
   const [toast, setToast] = useState<Toast | null>(null)
+  const [activePhotoIndex, setActivePhotoIndex] = useState(0)
 
   const router = useRouter()
   const supabase = createClient()
@@ -121,7 +124,7 @@ export default function DiscoverPage() {
 
     let query = supabase
       .from("profiles")
-      .select("id, real_name, department, year, gender, bio, relationship_intent, relationship_intents, avatar_url, interest_tags")
+      .select("id, username, real_name, department, year, gender, bio, relationship_intent, relationship_intents, avatar_url, photos, interest_tags")
       .eq("is_visible", true)
       .limit(15)
 
@@ -167,6 +170,7 @@ export default function DiscoverPage() {
     setSwipingId(null)
     setSwipeDirection(null)
     setProfiles(prev => prev.slice(1))
+    setActivePhotoIndex(0)
 
     if (isSuperLike) {
       if (superLikesLeft <= 0) {
@@ -235,8 +239,30 @@ export default function DiscoverPage() {
   }
 
   const current = profiles[0]
+  
   const avatar = current?.avatar_url
     || (current ? `https://api.dicebear.com/9.x/micah/svg?seed=${current.id}&backgroundColor=ffd700,ffa500` : "")
+
+  const allPhotos = current 
+    ? (current.photos || []).filter(Boolean) as string[]
+    : []
+  if (allPhotos.length === 0 && current) {
+    allPhotos.push(avatar)
+  }
+
+  const handleNextPhoto = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (activePhotoIndex < allPhotos.length - 1) {
+      setActivePhotoIndex(prev => prev + 1)
+    }
+  }
+
+  const handlePrevPhoto = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (activePhotoIndex > 0) {
+      setActivePhotoIndex(prev => prev - 1)
+    }
+  }
 
   const intentBadges = (profile: Profile): string => {
     // Prefer the new array column; fall back to legacy single-value column
@@ -267,16 +293,16 @@ export default function DiscoverPage() {
       <div className="flex-1 flex flex-col items-center justify-center relative overflow-hidden">
         {profiles.length > 0 ? (
           <>
-            <div className="w-full max-w-4xl flex items-center justify-center gap-4 sm:gap-12">
+            <div className="w-full h-full max-w-5xl flex items-center justify-center gap-4 sm:gap-12 py-2 sm:py-6">
               
               {/* LEFT BUTTONS (Pass & Report) */}
               <div className="flex flex-col items-center gap-4 sm:gap-6">
                 <button
                   onClick={() => handleSwipe(false)}
-                  className="flex h-16 w-16 sm:h-24 sm:w-24 items-center justify-center rounded-full border-2 border-destructive text-destructive hover:bg-destructive/10 transition-transform hover:scale-110 active:scale-95"
+                  className="flex h-16 w-16 sm:h-20 sm:w-20 lg:h-24 lg:w-24 items-center justify-center rounded-full border-2 border-destructive text-destructive hover:bg-destructive/10 transition-transform hover:scale-110 active:scale-95"
                   title="Pass"
                 >
-                  <X className="h-8 w-8 sm:h-12 sm:w-12" />
+                  <X className="h-8 w-8 sm:h-10 sm:w-10 lg:h-12 lg:w-12" />
                 </button>
                 <button
                   onClick={() => setReportModal({ open: true, targetId: current.id, targetName: current.real_name })}
@@ -289,7 +315,7 @@ export default function DiscoverPage() {
 
               {/* CENTER PROFILE (9:16 aspect ratio) */}
               <div
-                className={`relative w-full max-w-[320px] sm:max-w-[360px] aspect-[9/16] overflow-hidden rounded-2xl bg-muted/30 border border-border/50 shadow-2xl transition-all duration-350 ${
+                className={`relative w-full max-w-[360px] sm:max-w-none sm:w-auto h-auto sm:h-full max-h-[85vh] aspect-[9/16] overflow-hidden rounded-2xl bg-muted/30 border border-border/50 shadow-2xl transition-all duration-350 shrink-0 ${
                   swipingId === current.id
                     ? swipeDirection === "right"
                       ? "animate-swipe-right"
@@ -300,41 +326,64 @@ export default function DiscoverPage() {
                 {/* Profile Photo as Background */}
                 <div className="absolute inset-0">
                   <img
-                    src={avatar}
+                    src={allPhotos[activePhotoIndex]}
                     alt={current.real_name}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover transition-opacity duration-200"
                   />
                   {/* Gradient overlay for text legibility */}
-                  <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/80" />
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/80 pointer-events-none" />
                 </div>
 
+                {/* Story Indicators */}
+                {allPhotos.length > 1 && (
+                  <div className="absolute top-2 left-2 right-2 flex gap-1 z-20 pointer-events-none">
+                    {allPhotos.map((_, i) => (
+                      <div key={i} className={`h-1 flex-1 rounded-full bg-white/30 overflow-hidden`}>
+                        <div className={`h-full bg-white transition-all duration-300 ${i <= activePhotoIndex ? 'w-full' : 'w-0'}`} />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Navigation tap targets */}
+                {allPhotos.length > 1 && (
+                  <div className="absolute inset-0 flex z-10 pt-10 pb-40">
+                    <div className="flex-1 cursor-pointer" onClick={handlePrevPhoto} />
+                    <div className="flex-1 cursor-pointer" onClick={handleNextPhoto} />
+                  </div>
+                )}
+
                 {/* Intent badge top left */}
-                <div className="absolute top-4 left-4 z-10">
-                  <span className="text-xs font-semibold bg-background/80 text-foreground backdrop-blur-md rounded-full px-3 py-1">
+                <div className="absolute top-4 left-4 z-10 pointer-events-none">
+                  <span className="text-xs font-semibold bg-background/80 text-foreground backdrop-blur-md rounded-full px-3 py-1 pointer-events-auto">
                     {intentBadges(current)}
                   </span>
                 </div>
 
                 {/* Info Bottom */}
-                <div className="absolute bottom-0 inset-x-0 p-6 z-10 text-white">
-                  <div className="flex flex-col gap-1">
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-2xl font-bold leading-none">{current.real_name}</h2>
-                      <span className="text-xs font-medium bg-white/20 px-2 py-0.5 rounded-full backdrop-blur-md">
-                        {current.gender}
-                      </span>
+                <div className="absolute bottom-0 inset-x-0 p-6 z-10 text-white pointer-events-none flex flex-col gap-2">
+                  <div className="flex items-end gap-3">
+                    <img 
+                       src={avatar} 
+                       className="w-14 h-14 rounded-full object-cover bg-muted/50 shadow-md"
+                       alt={`${current.username} avatar`}
+                    />
+                    <div className="flex flex-col gap-0.5 flex-1">
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-xl font-bold leading-none shadow-black drop-shadow-md">{current.real_name}</h2>
+                      </div>
+                      <p className="text-sm text-white/90 shadow-black drop-shadow-md font-medium">
+                        @{current.username} · {current.department} · {current.year} Year
+                      </p>
                     </div>
-                    <p className="text-sm text-white/80">
-                      {current.department} · {current.year} Year
-                    </p>
                   </div>
 
                   {current.bio && (
-                    <p className="mt-3 text-sm text-white/90 line-clamp-3">{current.bio}</p>
+                    <p className="text-sm text-white/95 line-clamp-3 shadow-black drop-shadow-md">{current.bio}</p>
                   )}
 
                   {current.interest_tags && current.interest_tags.length > 0 && (
-                    <div className="mt-4 flex flex-wrap gap-1.5">
+                    <div className="flex flex-wrap gap-1.5">
                       {current.interest_tags.slice(0, 5).map(tag => (
                         <span key={tag} className="text-xs bg-black/40 border border-white/20 rounded-full px-2.5 py-1 font-medium backdrop-blur-md">
                           {tag}
@@ -349,10 +398,10 @@ export default function DiscoverPage() {
               <div className="flex flex-col items-center gap-4 sm:gap-6">
                 <button
                   onClick={() => handleSwipe(true)}
-                  className="flex h-16 w-16 sm:h-24 sm:w-24 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-transform hover:scale-110 active:scale-95 shadow-xl shadow-primary/20"
+                  className="flex h-16 w-16 sm:h-20 sm:w-20 lg:h-24 lg:w-24 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-transform hover:scale-110 active:scale-95 shadow-xl shadow-primary/20"
                   title="Like"
                 >
-                  <Heart className="h-8 w-8 sm:h-12 sm:w-12" />
+                  <Heart className="h-8 w-8 sm:h-10 sm:w-10 lg:h-12 lg:w-12" />
                 </button>
                 <button
                   onClick={() => handleSwipe(true, true)}
@@ -369,11 +418,6 @@ export default function DiscoverPage() {
               </div>
 
             </div>
-
-            {/* Remaining count */}
-            <p className="text-center text-xs text-muted-foreground mt-6">
-              {profiles.length} {profiles.length === 1 ? "profile" : "profiles"} remaining
-            </p>
           </>
         ) : (
           <div className="flex flex-col items-center justify-center text-center p-8 mt-4">

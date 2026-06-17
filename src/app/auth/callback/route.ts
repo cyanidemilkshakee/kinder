@@ -1,4 +1,4 @@
-/* eslint-disable */
+ 
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/server'
 
@@ -24,11 +24,11 @@ export async function GET(request: Request) {
       if (user) {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('real_name')
+          .select('real_name, username')
           .eq('id', user.id)
           .single()
           
-        if (!profile || !profile.real_name) {
+        if (!profile || !profile.real_name || !profile.username) {
           return NextResponse.redirect(`${origin}/onboarding`)
         }
       }

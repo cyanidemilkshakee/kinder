@@ -1,11 +1,12 @@
 /* eslint-disable */
 "use client"
 
-import { useState, useRef } from "react"
+import { useEffect, useState, useRef } from "react"
 import { createClient } from "@/lib/client"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 import { Loader2, User, BookOpen, Sparkles, ChevronRight, Image as ImageIcon, Tags, Upload } from "lucide-react"
+import { isValidUsername, normalizeUsername, usernameGuidance } from "@/lib/username"
 
 const STEPS = [
   { id: 1, title: "Who are you?", icon: User, desc: "Tell us your name and identity" },
@@ -29,6 +30,7 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(1)
   
   // Step 1
+  const [username, setUsername] = useState("")
   const [realName, setRealName] = useState("")
   const [gender, setGender] = useState("")
   const [dob, setDob] = useState("")
@@ -55,8 +57,29 @@ export default function OnboardingPage() {
   const router = useRouter()
   const supabase = createClient()
 
+  useEffect(() => {
+    const hydrateExistingProfile = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data } = await supabase
+        .from("profiles")
+        .select("username, real_name")
+        .eq("id", user.id)
+        .maybeSingle()
+
+      const existingUsername = data?.username || user.user_metadata?.username || ""
+      const existingName = data?.real_name || user.user_metadata?.full_name || ""
+
+      if (existingUsername) setUsername(normalizeUsername(existingUsername))
+      if (existingName) setRealName(existingName)
+    }
+
+    hydrateExistingProfile()
+  }, [])
+
   const canGoNext = () => {
-    if (step === 1) return realName.trim().length >= 2 && gender !== "" && dob !== ""
+    if (step === 1) return isValidUsername(username) && realName.trim().length >= 2 && gender !== "" && dob !== ""
     if (step === 2) return avatarFile !== null
     if (step === 3) return department !== "" && year !== ""
     if (step === 4) return relationshipIntent !== ""
@@ -102,6 +125,32 @@ export default function OnboardingPage() {
       return
     }
 
+    const normalizedUsername = normalizeUsername(username)
+    if (!isValidUsername(normalizedUsername)) {
+      setError(usernameGuidance(normalizedUsername) || "Enter a valid username")
+      setLoading(false)
+      return
+    }
+
+    const { data: usernameOwner, error: usernameCheckError } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("username", normalizedUsername)
+      .neq("id", user.id)
+      .maybeSingle()
+
+    if (usernameCheckError) {
+      setError(usernameCheckError.message)
+      setLoading(false)
+      return
+    }
+
+    if (usernameOwner) {
+      setError("That username is already taken.")
+      setLoading(false)
+      return
+    }
+
     let avatarUrl = ""
 
     if (avatarFile) {
@@ -130,6 +179,7 @@ export default function OnboardingPage() {
       .upsert({
         id: user.id,
         email: user.email!,
+        username: normalizedUsername,
         real_name: realName,
         department,
         year,
@@ -209,6 +259,23 @@ export default function OnboardingPage() {
           {/* Step 1: Identity */}
           {step === 1 && (
             <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Username</label>
+                <div className="flex rounded-xl border border-input bg-background focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/30 transition-all">
+                  <span className="flex items-center pl-4 text-sm text-muted-foreground">@</span>
+                  <input
+                    type="text"
+                    required
+                    value={username}
+                    onChange={(e) => setUsername(normalizeUsername(e.target.value))}
+                    placeholder="your_username"
+                    className="block w-full rounded-xl bg-transparent px-1 py-2.5 pr-4 text-sm placeholder:text-muted-foreground focus:outline-none"
+                    minLength={3}
+                    maxLength={20}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">People can find you and send confessions with this.</p>
+              </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">Your Full Name</label>
                 <input

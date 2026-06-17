@@ -10,6 +10,7 @@ import { useEffect, useState } from "react"
 
 type UserProfile = {
   real_name: string
+  username: string | null
   avatar_url: string | null
   id: string
 }
@@ -19,6 +20,7 @@ export function Sidebar() {
   const router = useRouter()
   const supabase = createClient()
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false)
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -26,7 +28,7 @@ export function Sidebar() {
       if (!user) return
       const { data } = await supabase
         .from('profiles')
-        .select('id, real_name, avatar_url')
+        .select('id, real_name, username, avatar_url')
         .eq('id', user.id)
         .single()
       if (data) setUserProfile(data)
@@ -34,17 +36,19 @@ export function Sidebar() {
     fetchUser()
   }, [])
 
+  useEffect(() => {
+    setProfileMenuOpen(false)
+  }, [pathname])
+
   const upperLinks = [
     { name: "Discover", href: "/discover", icon: Home },
     { name: "Likes", href: "/likes", icon: Heart },
     { name: "Chat", href: "/chat", icon: MessageCircle },
     { name: "Confessions", href: "/confessions", icon: ScrollText },
-    { name: "Profile", href: "/profile", icon: User },
   ]
 
   const bottomLinks = [
     { name: "Donate", href: "/donate", icon: HeartHandshake },
-    { name: "Settings", href: "/settings", icon: Settings },
     { name: "About", href: "/about", icon: Info },
   ]
 
@@ -129,31 +133,59 @@ export function Sidebar() {
               </Link>
             )
           })}
-
-          <button
-            onClick={handleLogout}
-            className="group flex w-full items-center rounded-xl px-3 py-2.5 text-sm font-medium text-sidebar-foreground/60 hover:bg-black/10 hover:text-sidebar-foreground transition-all duration-200"
-          >
-            <LogOut className="mr-3 h-[18px] w-[18px] flex-shrink-0" />
-            <span className="tracking-wide">Sign Out</span>
-          </button>
         </nav>
 
-        {/* User info card */}
-        <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-sidebar-accent/50 border border-sidebar-border/50 backdrop-blur-sm">
-          <div className="h-8 w-8 rounded-full overflow-hidden border-2 border-sidebar-primary/30 bg-sidebar-accent flex-shrink-0 shadow-sm">
-            {avatar ? (
-              <img src={avatar} alt="You" className="h-full w-full object-cover" />
-            ) : (
-              <div className="h-full w-full flex items-center justify-center">
-                <Loader2 className="h-4 w-4 animate-spin text-sidebar-foreground/50" />
-              </div>
-            )}
-          </div>
-          <div className="overflow-hidden flex-1 min-w-0">
-            <p className="text-xs font-semibold truncate text-sidebar-foreground">{userProfile?.real_name || 'Loading…'}</p>
-            <p className="text-[10px] text-sidebar-foreground/40 font-medium tracking-wide uppercase">Campus</p>
-          </div>
+        {/* User info and Menu wrapper */}
+        <div className="relative">
+          {profileMenuOpen && (
+            <div className="absolute bottom-full left-0 w-full mb-2 z-50 rounded-xl border border-sidebar-border/60 bg-[#ff9999] p-1.5 backdrop-blur-md shadow-lg animate-in fade-in slide-in-from-bottom-2">
+              <Link
+                href="/profile"
+                className="group flex items-center rounded-lg px-3 py-2.5 text-sm font-medium text-black/80 transition-all duration-200 hover:bg-black/10 hover:text-black"
+              >
+                <User className="mr-3 h-[18px] w-[18px] flex-shrink-0" aria-hidden="true" />
+                <span className="tracking-wide">Profile</span>
+              </Link>
+              <Link
+                href="/settings"
+                className="group flex items-center rounded-lg px-3 py-2.5 text-sm font-medium text-black/80 transition-all duration-200 hover:bg-black/10 hover:text-black"
+              >
+                <Settings className="mr-3 h-[18px] w-[18px] flex-shrink-0" aria-hidden="true" />
+                <span className="tracking-wide">Settings</span>
+              </Link>
+              <button
+                onClick={handleLogout}
+                className="group flex w-full items-center rounded-lg px-3 py-2.5 text-sm font-medium text-black/80 transition-all duration-200 hover:bg-black/10 hover:text-black"
+              >
+                <LogOut className="mr-3 h-[18px] w-[18px] flex-shrink-0" aria-hidden="true" />
+                <span className="tracking-wide">Sign Out</span>
+              </button>
+            </div>
+          )}
+
+          {/* User info card */}
+          <button
+            type="button"
+            onClick={() => setProfileMenuOpen((open) => !open)}
+            aria-expanded={profileMenuOpen}
+            className="flex w-full items-center gap-3 rounded-xl border border-sidebar-border/50 bg-sidebar-accent/50 px-3 py-2.5 text-left backdrop-blur-sm transition-all duration-200 hover:bg-sidebar-accent/70"
+          >
+            <div className="h-8 w-8 rounded-full overflow-hidden border-2 border-sidebar-primary/30 bg-sidebar-accent flex-shrink-0 shadow-sm">
+              {avatar ? (
+                <img src={avatar} alt="You" className="h-full w-full object-cover" />
+              ) : (
+                <div className="h-full w-full flex items-center justify-center">
+                  <Loader2 className="h-4 w-4 animate-spin text-sidebar-foreground/50" />
+                </div>
+              )}
+            </div>
+            <div className="overflow-hidden flex-1 min-w-0">
+              <p className="text-xs font-semibold truncate text-sidebar-foreground">{userProfile?.real_name || 'Loading…'}</p>
+              <p className="text-[10px] text-sidebar-foreground/40 font-medium tracking-wide">
+                {userProfile?.username ? `@${userProfile.username}` : "Set username"}
+              </p>
+            </div>
+          </button>
         </div>
       </div>
     </div>

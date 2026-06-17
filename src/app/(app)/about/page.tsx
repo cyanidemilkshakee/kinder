@@ -1,7 +1,44 @@
-/* eslint-disable */
-import { Info, Shield, Heart, Zap, Lock } from "lucide-react"
+ 
+import type { LucideIcon } from "lucide-react"
+import { Info, Shield, Heart, Zap, Lock, Mail, HelpCircle, Bug, FileText, ChevronRight } from "lucide-react"
+import Link from "next/link"
 
 export default function AboutPage() {
+  const supportLinks: { icon: LucideIcon; label: string; desc: string; href: string; color: string; bg: string }[] = [
+    {
+      icon: Mail,
+      label: "Contact Us",
+      desc: "Send us a message or ask a question",
+      href: "/settings/contact",
+      color: "text-zinc-500",
+      bg: "bg-zinc-500/10",
+    },
+    {
+      icon: HelpCircle,
+      label: "Help & Support",
+      desc: "FAQs and how to use the app",
+      href: "/settings/help",
+      color: "text-emerald-500",
+      bg: "bg-emerald-500/10",
+    },
+    {
+      icon: Bug,
+      label: "Report a Bug",
+      desc: "Found something broken? Let us know",
+      href: "/settings/contact?type=bug",
+      color: "text-orange-500",
+      bg: "bg-orange-500/10",
+    },
+    {
+      icon: FileText,
+      label: "Privacy Policy",
+      desc: "How we collect, use, and protect your data",
+      href: "/settings/privacy",
+      color: "text-violet-500",
+      bg: "bg-violet-500/10",
+    },
+  ]
+
   return (
     <div className="flex flex-col h-full overflow-y-auto p-6 md:p-12">
       <div className="w-full max-w-2xl text-left space-y-12">
@@ -57,6 +94,32 @@ export default function AboutPage() {
                   </p>
                 </div>
               </div>
+            </div>
+          </section>
+
+          {/* Support & Legal */}
+          <section className="space-y-4 pt-4">
+            <h2 className="text-xl font-bold">Support & Legal</h2>
+            <div className="grid gap-2">
+              {supportLinks.map((item) => {
+                const Icon = item.icon
+                return (
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    className="flex items-center gap-4 py-3 hover:opacity-80 transition-opacity group"
+                  >
+                    <div className={`h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0`}>
+                      <Icon className={`h-6 w-6 ${item.color}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-base font-semibold">{item.label}</p>
+                      <p className="text-xs text-muted-foreground">{item.desc}</p>
+                    </div>
+                    <ChevronRight className="h-5 w-5 text-muted-foreground/50 transition-colors flex-shrink-0" />
+                  </Link>
+                )
+              })}
             </div>
           </section>
 

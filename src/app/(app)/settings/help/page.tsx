@@ -148,7 +148,7 @@ const sections: Section[] = [
     faqs: [
       {
         q: "Can I change my email or password?",
-        a: "Email and password changes are handled through your college email provider. Your Kinder account is tied to your college email.",
+        a: "Your email stays tied to your verified college account. You can set up or change your password from Settings, and you can change your username from Profile.",
       },
       {
         q: "Why can't I change some profile fields?",

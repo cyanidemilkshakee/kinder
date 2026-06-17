@@ -6,6 +6,7 @@ import { createClient } from "@/lib/client"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 import { ScrollText, Send, Info, Loader2 } from "lucide-react"
+import { isValidUsername, normalizeUsername, usernameGuidance } from "@/lib/username"
 
 type Confession = {
   id: string
@@ -19,7 +20,7 @@ export default function ConfessionsPage() {
   const [confessions, setConfessions] = useState<Confession[]>([])
   const [loading, setLoading] = useState(true)
   
-  const [receiverEmail, setReceiverEmail] = useState("")
+  const [receiverUsername, setReceiverUsername] = useState("")
   const [content, setContent] = useState("")
   const [sending, setSending] = useState(false)
   const [toast, setToast] = useState<{msg: string, type: "success" | "error" | "info"} | null>(null)
@@ -46,12 +47,22 @@ export default function ConfessionsPage() {
       return
     }
 
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("email, username")
+      .eq("id", user.id)
+      .maybeSingle()
+
+    const recipientFilters = [`receiver_id.eq.${user.id}`]
+    if (profile?.username) recipientFilters.push(`receiver_username.eq.${profile.username}`)
+    if (user.email) recipientFilters.push(`receiver_email.eq.${user.email}`)
+
     // Only fetch approved confessions for the current user
     const { data, error } = await supabase
       .from("confessions")
       .select("*")
-      .eq("receiver_email", user.email)
       .eq("status", "approved")
+      .or(recipientFilters.join(","))
       .order("created_at", { ascending: false })
 
     if (data) setConfessions(data)
@@ -73,18 +84,50 @@ export default function ConfessionsPage() {
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!receiverEmail.endsWith("@bmsce.ac.in")) {
-      showToast("Please enter a valid institutional email.", "error")
+    const normalizedReceiver = normalizeUsername(receiverUsername)
+
+    if (!isValidUsername(normalizedReceiver)) {
+      showToast(usernameGuidance(normalizedReceiver) || "Please enter a valid username.", "error")
       return
     }
 
     setSending(true)
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) {
+      setSending(false)
+      router.push("/")
+      return
+    }
+
+    const { data: receiver, error: receiverError } = await supabase
+      .from("profiles")
+      .select("id, email, username")
+      .eq("username", normalizedReceiver)
+      .maybeSingle()
+
+    if (receiverError) {
+      showToast(receiverError.message, "error")
+      setSending(false)
+      return
+    }
+
+    if (!receiver) {
+      showToast("No student found with that username.", "error")
+      setSending(false)
+      return
+    }
+
+    if (receiver.id === user.id) {
+      showToast("Choose someone else's username.", "error")
+      setSending(false)
+      return
+    }
 
     const { error } = await supabase.from("confessions").insert({
       sender_id: user.id,
-      receiver_email: receiverEmail,
+      receiver_id: receiver.id,
+      receiver_username: receiver.username,
+      receiver_email: receiver.email,
       content: content
     })
 
@@ -92,7 +135,7 @@ export default function ConfessionsPage() {
       showToast("Failed to send confession.", "error")
     } else {
       showToast("Confession submitted! It will be reviewed by moderators before delivery.", "success")
-      setReceiverEmail("")
+      setReceiverUsername("")
       setContent("")
       setActiveTab("receive")
     }
@@ -205,14 +248,16 @@ export default function ConfessionsPage() {
 
             <form onSubmit={handleSend} className="space-y-5">
               <div className="space-y-1.5">
-                <label className="text-sm font-semibold">Recipient Email</label>
+                <label className="text-sm font-semibold">Recipient Username</label>
                 <input
-                  type="email"
+                  type="text"
                   required
-                  value={receiverEmail}
-                  onChange={(e) => setReceiverEmail(e.target.value)}
-                  placeholder="their.name@college.edu"
+                  value={receiverUsername}
+                  onChange={(e) => setReceiverUsername(normalizeUsername(e.target.value))}
+                  placeholder="their_username"
                   className="block w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
+                  minLength={3}
+                  maxLength={20}
                 />
               </div>
 
@@ -236,7 +281,7 @@ export default function ConfessionsPage() {
               <Button 
                 type="submit" 
                 className="w-full rounded-xl gap-2" 
-                disabled={sending || content.length > 500 || content.length === 0 || !receiverEmail}
+                disabled={sending || content.length > 500 || content.length === 0 || !receiverUsername}
               >
                 {sending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />

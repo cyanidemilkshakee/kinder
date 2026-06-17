@@ -3,15 +3,11 @@
 
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/client"
-import { useTheme } from "next-themes"
 import { Button } from "@/components/ui/button"
-import type { LucideIcon } from "lucide-react"
 import {
-  Loader2, Moon, Sun, Monitor, AlertTriangle, Shield,
-  EyeOff, Eye, Flame, Trash2,
-  Mail, HelpCircle, Bug, FileText, ChevronRight
+  Loader2, AlertTriangle, Shield,
+  EyeOff, Eye, Flame, Trash2, KeyRound, Lock
 } from "lucide-react"
-import Link from "next/link"
 
 type ProfileSettings = {
   id: string
@@ -20,15 +16,19 @@ type ProfileSettings = {
   hookup_opt_in_changed_at: string | null
   deletion_queued_at: string | null
   date_of_birth: string | null
+  has_password: boolean
 }
 
 export default function SettingsPage() {
-  const { theme, setTheme } = useTheme()
   const [settings, setSettings] = useState<ProfileSettings | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [passwordSaving, setPasswordSaving] = useState(false)
   const [toast, setToast] = useState<{msg: string, type: "success" | "error" | "info"} | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
 
   const supabase = createClient()
 
@@ -48,7 +48,7 @@ export default function SettingsPage() {
 
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, is_visible, hookup_opt_in, hookup_opt_in_changed_at, deletion_queued_at, date_of_birth")
+        .select("id, is_visible, hookup_opt_in, hookup_opt_in_changed_at, deletion_queued_at, date_of_birth, has_password")
         .eq("id", user.id)
         .single()
 
@@ -101,6 +101,58 @@ export default function SettingsPage() {
     }
   }
 
+  const handlePasswordUpdate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!settings) return
+
+    if (settings.has_password && !currentPassword.trim()) {
+      showToast("Enter your current password first.", "error")
+      return
+    }
+
+    if (newPassword.length < 8) {
+      showToast("Password must be at least 8 characters.", "error")
+      return
+    }
+
+    if (newPassword !== confirmPassword) {
+      showToast("New password and confirmation do not match.", "error")
+      return
+    }
+
+    setPasswordSaving(true)
+    try {
+      const payload: { password: string; current_password?: string } = {
+        password: newPassword,
+      }
+
+      if (settings.has_password) {
+        payload.current_password = currentPassword
+      }
+
+      const { error: authError } = await supabase.auth.updateUser(payload)
+      if (authError) throw authError
+
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({ has_password: true })
+        .eq("id", settings.id)
+
+      if (profileError) throw profileError
+
+      setSettings({ ...settings, has_password: true })
+      setCurrentPassword("")
+      setNewPassword("")
+      setConfirmPassword("")
+      showToast(settings.has_password ? "Password changed successfully." : "Password set up successfully.", "success")
+    } catch (error: any) {
+      const message = error?.message || "Unable to update password."
+      showToast(message, "error")
+    } finally {
+      setPasswordSaving(false)
+    }
+  }
+
   const handleAccountAction = async () => {
     if (!settings) return
 
@@ -138,40 +190,6 @@ export default function SettingsPage() {
     isMinor = Math.abs(ageDate.getUTCFullYear() - 1970) < 18
   }
 
-  const supportLinks: { icon: LucideIcon; label: string; desc: string; href: string; color: string; bg: string }[] = [
-    {
-      icon: Mail,
-      label: "Contact Us",
-      desc: "Send us a message or ask a question",
-      href: "/settings/contact",
-      color: "text-zinc-500",
-      bg: "bg-zinc-500/10",
-    },
-    {
-      icon: HelpCircle,
-      label: "Help & Support",
-      desc: "FAQs and how to use the app",
-      href: "/settings/help",
-      color: "text-emerald-500",
-      bg: "bg-emerald-500/10",
-    },
-    {
-      icon: Bug,
-      label: "Report a Bug",
-      desc: "Found something broken? Let us know",
-      href: "/settings/contact?type=bug",
-      color: "text-orange-500",
-      bg: "bg-orange-500/10",
-    },
-    {
-      icon: FileText,
-      label: "Privacy Policy",
-      desc: "How we collect, use, and protect your data",
-      href: "/settings/privacy",
-      color: "text-violet-500",
-      bg: "bg-violet-500/10",
-    },
-  ]
 
   return (
     <div className="flex flex-col h-full min-h-0 overflow-y-auto">
@@ -188,37 +206,101 @@ export default function SettingsPage() {
                   <p className="text-sm text-muted-foreground">Preferences, privacy, and account control.</p>
                 </div>
               </div>
-              {saving && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
+              {(saving || passwordSaving) && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
             </div>
 
             <div className="space-y-10 pt-4">
 
-              {/* App Appearance */}
+              {/* Account Security */}
               <section className="space-y-4">
-                <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground border-b border-border/50 pb-2">Appearance</h3>
-                <div className="grid grid-cols-3 gap-3">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground border-b border-border/50 pb-2">Account Security</h3>
+
+                <div className="grid gap-3 sm:grid-cols-2">
                   <button
-                    className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 transition-all duration-200 ${theme === 'light' ? 'border-primary bg-primary/10 text-primary font-semibold' : 'border-transparent bg-transparent hover:bg-muted/60 text-muted-foreground hover:text-foreground'}`}
-                    onClick={() => setTheme('light')}
+                    type="button"
+                    disabled={settings.has_password}
+                    className={`flex items-start gap-3 rounded-xl border px-4 py-3 text-left transition-all duration-200 ${
+                      !settings.has_password
+                        ? "border-primary bg-primary/10 text-foreground"
+                        : "border-border bg-muted/40 text-muted-foreground opacity-60"
+                    }`}
                   >
-                    <Sun className="h-5 w-5" />
-                    <span className="text-sm">Light</span>
+                    <KeyRound className="h-5 w-5 flex-shrink-0 text-primary" />
+                    <span>
+                      <span className="block text-sm font-semibold">Set Up Password</span>
+                      <span className="block text-xs text-muted-foreground">Available for OAuth-only accounts.</span>
+                    </span>
                   </button>
                   <button
-                    className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 transition-all duration-200 ${theme === 'dark' ? 'border-primary bg-primary/10 text-primary font-semibold' : 'border-transparent bg-transparent hover:bg-muted/60 text-muted-foreground hover:text-foreground'}`}
-                    onClick={() => setTheme('dark')}
+                    type="button"
+                    disabled={!settings.has_password}
+                    className={`flex items-start gap-3 rounded-xl border px-4 py-3 text-left transition-all duration-200 ${
+                      settings.has_password
+                        ? "border-primary bg-primary/10 text-foreground"
+                        : "border-border bg-muted/40 text-muted-foreground opacity-60"
+                    }`}
                   >
-                    <Moon className="h-5 w-5" />
-                    <span className="text-sm">Dark</span>
-                  </button>
-                  <button
-                    className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 transition-all duration-200 ${theme === 'system' ? 'border-primary bg-primary/10 text-primary font-semibold' : 'border-transparent bg-transparent hover:bg-muted/60 text-muted-foreground hover:text-foreground'}`}
-                    onClick={() => setTheme('system')}
-                  >
-                    <Monitor className="h-5 w-5" />
-                    <span className="text-sm">System</span>
+                    <Lock className="h-5 w-5 flex-shrink-0 text-primary" />
+                    <span>
+                      <span className="block text-sm font-semibold">Change Password</span>
+                      <span className="block text-xs text-muted-foreground">Available once a password exists.</span>
+                    </span>
                   </button>
                 </div>
+
+                <form onSubmit={handlePasswordUpdate} className="space-y-3">
+                  {settings.has_password && (
+                    <div className="space-y-1.5">
+                      <label htmlFor="current-password" className="text-sm font-semibold">Current Password</label>
+                      <input
+                        id="current-password"
+                        type="password"
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
+                        autoComplete="current-password"
+                      />
+                    </div>
+                  )}
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <label htmlFor="new-password" className="text-sm font-semibold">New Password</label>
+                      <input
+                        id="new-password"
+                        type="password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
+                        autoComplete="new-password"
+                        minLength={8}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label htmlFor="confirm-password" className="text-sm font-semibold">Confirm Password</label>
+                      <input
+                        id="confirm-password"
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
+                        autoComplete="new-password"
+                        minLength={8}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end">
+                    <Button
+                      type="submit"
+                      className="w-full rounded-xl sm:w-auto"
+                      disabled={passwordSaving || !newPassword || !confirmPassword || (settings.has_password && !currentPassword)}
+                    >
+                      {passwordSaving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                      {settings.has_password ? "Change Password" : "Set Up Password"}
+                    </Button>
+                  </div>
+                </form>
               </section>
 
               {/* Discovery & Privacy */}
@@ -281,31 +363,6 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Support & Legal */}
-          <div className="space-y-4 pt-6">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground border-b border-border/50 pb-2">Support & Legal</h3>
-            <div className="grid gap-2">
-              {supportLinks.map((item) => {
-                const Icon = item.icon
-                return (
-                  <Link
-                    key={item.label}
-                    href={item.href}
-                    className="flex items-center gap-4 py-3 hover:opacity-80 transition-opacity group"
-                  >
-                    <div className={`h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0`}>
-                      <Icon className={`h-6 w-6 ${item.color}`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-base font-semibold">{item.label}</p>
-                      <p className="text-xs text-muted-foreground">{item.desc}</p>
-                    </div>
-                    <ChevronRight className="h-5 w-5 text-muted-foreground/50 transition-colors flex-shrink-0" />
-                  </Link>
-                )
-              })}
-            </div>
-          </div>
 
           {/* Danger Zone */}
           <div className="space-y-4 pt-6 pb-12">

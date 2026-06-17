@@ -1,4 +1,4 @@
-/* eslint-disable */
+ 
 import type { Metadata } from "next";
 import { Poppins, Geist_Mono } from "next/font/google";
 import "./globals.css";
