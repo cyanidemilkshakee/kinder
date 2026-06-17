@@ -64,7 +64,7 @@ function AuthForm() {
 
   const isValidEmail = (emailToCheck: string) => {
     const lowerEmail = emailToCheck.toLowerCase()
-    if (lowerEmail === "ghostfaked02@gmail.com" || lowerEmail === "ghostfaked03@gmail.com") return true
+    if (lowerEmail === "ghostfaked02@gmail.com" || lowerEmail === "ghostfaked03@gmail.com" || lowerEmail === "thetaghost1@gmail.com") return true
     return lowerEmail.endsWith("@bmsce.ac.in")
   }
 
