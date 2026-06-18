@@ -4,7 +4,6 @@ Kinder is a campus-exclusive social discovery, friendship, and dating platform d
 
 ## 🌟 Key Features
 
-- **Institution Verification:** Restricts access to students with verified `.ac.in` email addresses via Supabase Authentication.
 - **Robust Profiles:** Rich profiles including photos, short bios, study fields, graduation year, relationship intent, food habits, and interactive interest tags.
 - **Discovery Algorithm:** Dynamic profile matching that respects user intent (e.g., Friendship vs. Dating) and prevents showing discarded or matched profiles.
 - **Anonymous Confessions:** A completely anonymous messaging system where students can send messages to campus crushes. All messages pass through a moderation queue and require the recipient's consent ("Accept & Read") before they are revealed.
