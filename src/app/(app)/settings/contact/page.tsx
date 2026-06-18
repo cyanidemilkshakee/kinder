@@ -250,7 +250,7 @@ export default function ContactPage() {
   return (
     <div className="flex flex-col h-full min-h-0 overflow-y-auto">
       <div className="flex-1 p-6 md:p-12">
-        <div className="w-full max-w-2xl mx-auto space-y-12">
+        <div className="w-full max-w-2xl text-left space-y-12">
 
           {/* Header */}
           <div className="space-y-6">
@@ -261,7 +261,6 @@ export default function ContactPage() {
               <ArrowLeft className="h-4 w-4" /> Back to Settings
             </Link>
             <div className="space-y-4">
-              <Mail className="h-10 w-10 text-zinc-500 mb-2" />
               <div>
                 <Suspense fallback={<h2 className="text-3xl font-extrabold tracking-tight">Contact Us</h2>}>
                   <ContactPageTitle />

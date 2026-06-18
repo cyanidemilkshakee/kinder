@@ -1,11 +1,18 @@
 /* eslint-disable */
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
-import { createClient } from "@/lib/client"
-import { Button } from "@/components/ui/button"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { X, Heart, Loader2, Star } from "lucide-react"
+import { Flag, Heart, Loader2, Star, X } from "lucide-react"
+import { ProfilePostCard, type ProfileSwipeDirection } from "@/components/ProfilePostCard"
+import { Button } from "@/components/ui/button"
+import { createClient } from "@/lib/client"
+import {
+  RELATIONSHIP_INTENTS,
+  RelationshipIntent,
+  formatRelationshipIntent,
+  normalizeRelationshipIntents,
+} from "@/lib/profile-options"
 
 type Liker = {
   id: string
@@ -20,34 +27,70 @@ type Liker = {
   avatar_url: string | null
   photos: string[] | null
   interest_tags: string[] | null
+  food_preference: string | null
+  drinking_habit: string | null
+  smoking_habit: string | null
   isSuperLike: boolean
 }
 
-type TabType = "friendships" | "dating" | "hookups"
+type ReportModal = {
+  open: boolean
+  targetId: string | null
+  targetName: string
+}
+
+type Toast = { msg: string; type: "success" | "error" | "info" }
+
+type TouchPoint = {
+  x: number
+  y: number
+}
+
+const REPORT_REASONS = [
+  "Fake profile / Impersonation",
+  "Inappropriate content",
+  "Harassment or threats",
+  "Spam",
+  "Underage user",
+  "Other",
+]
+
+function profileHasIntent(profile: Liker, intent: RelationshipIntent) {
+  return normalizeRelationshipIntents(profile.relationship_intents, profile.relationship_intent).includes(intent)
+}
 
 export default function LikesPage() {
-  const [friendshipLikers, setFriendshipLikers] = useState<Liker[]>([])
-  const [datingLikers, setDatingLikers] = useState<Liker[]>([])
-  const [hookupLikers, setHookupLikers] = useState<Liker[]>([])
-  const [activeTab, setActiveTab] = useState<TabType>("friendships")
-
+  const [likers, setLikers] = useState<Liker[]>([])
+  const [activeIntent, setActiveIntent] = useState<RelationshipIntent>("friendship")
   const [loading, setLoading] = useState(true)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [swipingId, setSwipingId] = useState<string | null>(null)
-  const [swipeDirection, setSwipeDirection] = useState<"left" | "right" | null>(null)
+  const [swipeDirection, setSwipeDirection] = useState<ProfileSwipeDirection | null>(null)
+  const [touchStart, setTouchStart] = useState<TouchPoint | null>(null)
   const [activePhotoIndex, setActivePhotoIndex] = useState(0)
   const [matchModal, setMatchModal] = useState<{ open: boolean; matchedUser: Liker | null; matchId: string | null }>({ open: false, matchedUser: null, matchId: null })
-  
+  const [reportModal, setReportModal] = useState<ReportModal>({ open: false, targetId: null, targetName: "" })
+  const [reportReason, setReportReason] = useState("")
+  const [reportLoading, setReportLoading] = useState(false)
+  const [toast, setToast] = useState<Toast | null>(null)
+
   const supabase = createClient()
   const router = useRouter()
+
+  const showToast = (msg: string, type: Toast["type"] = "info") => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3500)
+  }
 
   const fetchLikers = useCallback(async () => {
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { router.push("/"); return }
+    if (!user) {
+      router.push("/")
+      return
+    }
     setCurrentUserId(user.id)
 
-    // Get right-swipes on me, my own swipes, and super likes on me
     const [rightSwipesRes, mySwipesRes, superLikesRes] = await Promise.all([
       supabase.from("swipes").select("swiper_id").eq("swiped_id", user.id).eq("is_right_swipe", true),
       supabase.from("swipes").select("swiped_id").eq("swiper_id", user.id),
@@ -55,60 +98,40 @@ export default function LikesPage() {
     ])
 
     const rightSwipes = rightSwipesRes.data || []
-    const mySwipedIds = new Set((mySwipesRes.data || []).map(s => s.swiped_id))
-    const superLikerIds = new Set((superLikesRes.data || []).map(s => s.sender_id))
-
-    const pendingLikerIds = rightSwipes.map(s => s.swiper_id).filter(id => !mySwipedIds.has(id))
+    const mySwipedIds = new Set((mySwipesRes.data || []).map((swipe) => swipe.swiped_id))
+    const superLikerIds = new Set((superLikesRes.data || []).map((like) => like.sender_id))
+    const pendingLikerIds = rightSwipes.map((swipe) => swipe.swiper_id).filter((id) => !mySwipedIds.has(id))
 
     if (pendingLikerIds.length === 0) {
-      setFriendshipLikers([])
-      setDatingLikers([])
-      setHookupLikers([])
+      setLikers([])
       setLoading(false)
       return
     }
 
     const { data: profiles } = await supabase
       .from("profiles")
-      .select("id, username, real_name, department, year, gender, bio, relationship_intent, relationship_intents, avatar_url, photos, interest_tags")
+      .select("id, username, real_name, department, year, gender, bio, relationship_intent, relationship_intents, avatar_url, photos, interest_tags, food_preference, drinking_habit, smoking_habit")
       .in("id", pendingLikerIds)
       .eq("is_visible", true)
 
-    const enrichedProfiles: Liker[] = (profiles || []).map(p => ({
-      ...p,
-      isSuperLike: superLikerIds.has(p.id)
-    }))
+    const enrichedProfiles: Liker[] = (profiles || [])
+      .map((profile) => ({
+        ...profile,
+        isSuperLike: superLikerIds.has(profile.id),
+      }))
+      .sort((a, b) => (b.isSuperLike ? 1 : 0) - (a.isSuperLike ? 1 : 0))
 
-    // Sort function: Super likes first
-    const sortLikers = (a: Liker, b: Liker) => {
-      return (b.isSuperLike ? 1 : 0) - (a.isSuperLike ? 1 : 0)
+    setLikers(enrichedProfiles)
+
+    const hasFriendships = enrichedProfiles.some((profile) => profileHasIntent(profile, "friendship"))
+    const hasDating = enrichedProfiles.some((profile) => profileHasIntent(profile, "dating"))
+    if (!hasFriendships && hasDating) {
+      setActiveIntent("dating")
+    } else {
+      setActiveIntent("friendship")
     }
 
-    const friendships = enrichedProfiles.filter(p => {
-      const intents = p.relationship_intents && p.relationship_intents.length > 0 ? p.relationship_intents : [p.relationship_intent]
-      return intents.includes('friendship')
-    }).sort(sortLikers)
-
-    const dating = enrichedProfiles.filter(p => {
-      const intents = p.relationship_intents && p.relationship_intents.length > 0 ? p.relationship_intents : [p.relationship_intent]
-      return intents.includes('dating')
-    }).sort(sortLikers)
-
-    const hookups = enrichedProfiles.filter(p => {
-      const intents = p.relationship_intents && p.relationship_intents.length > 0 ? p.relationship_intents : [p.relationship_intent]
-      return intents.includes('casual')
-    }).sort(sortLikers)
-
-    setFriendshipLikers(friendships)
-    setDatingLikers(dating)
-    setHookupLikers(hookups)
-    
-    // Automatically select the first non-empty tab if possible
-    if (friendships.length === 0) {
-      if (dating.length > 0) setActiveTab("dating")
-      else if (hookups.length > 0) setActiveTab("hookups")
-    }
-
+    setActivePhotoIndex(0)
     setLoading(false)
   }, [])
 
@@ -116,32 +139,30 @@ export default function LikesPage() {
     fetchLikers()
   }, [fetchLikers])
 
-  const getActiveList = () => {
-    if (activeTab === "friendships") return friendshipLikers
-    if (activeTab === "dating") return datingLikers
-    return hookupLikers
-  }
+  const groupedLikers = useMemo(() => {
+    return {
+      friendship: likers.filter((profile) => profileHasIntent(profile, "friendship")),
+      dating: likers.filter((profile) => profileHasIntent(profile, "dating")),
+    }
+  }, [likers])
 
-  const handleSwipe = async (isRight: boolean) => {
-    const currentList = getActiveList()
-    if (currentList.length === 0 || !currentUserId) return
-    const current = currentList[0]
+  const activeLikers = groupedLikers[activeIntent]
+  const current = activeLikers[0]
+
+  const handleSwipe = async (
+    isRight: boolean,
+    direction: ProfileSwipeDirection = isRight ? "right" : "left",
+  ) => {
+    if (!current || !currentUserId || swipingId) return
 
     setSwipingId(current.id)
-    setSwipeDirection(isRight ? "right" : "left")
-    
-    // Let animation play
-    await new Promise(r => setTimeout(r, 350))
+    setSwipeDirection(direction)
+    await new Promise((resolve) => setTimeout(resolve, 350))
     setSwipingId(null)
     setSwipeDirection(null)
     setActivePhotoIndex(0)
+    setLikers((prev) => prev.filter((profile) => profile.id !== current.id))
 
-    // Remove from all lists so they don't reappear if we switch tabs
-    setFriendshipLikers(prev => prev.filter(p => p.id !== current.id))
-    setDatingLikers(prev => prev.filter(p => p.id !== current.id))
-    setHookupLikers(prev => prev.filter(p => p.id !== current.id))
-
-    // Record swipe
     await supabase.from("swipes").insert({
       swiper_id: currentUserId,
       swiped_id: current.id,
@@ -149,19 +170,107 @@ export default function LikesPage() {
     })
 
     if (isRight) {
-      // It's a guaranteed match since they already liked us!
       const user1_id = currentUserId < current.id ? currentUserId : current.id
       const user2_id = currentUserId < current.id ? current.id : currentUserId
-      
+
       const { data: match } = await supabase
         .from("matches")
         .insert({ user1_id, user2_id })
         .select("id")
         .single()
-        
+
       if (match) {
         setMatchModal({ open: true, matchedUser: current, matchId: match.id })
       }
+    }
+  }
+
+  const handleSuperLike = async (direction: ProfileSwipeDirection = "up") => {
+    if (!current || !currentUserId) return
+
+    await supabase.from("super_likes").insert({
+      sender_id: currentUserId,
+      receiver_id: current.id,
+    })
+    await handleSwipe(true, direction)
+  }
+
+  const handleReport = async () => {
+    if (!reportReason || !reportModal.targetId || !currentUserId) return
+
+    setReportLoading(true)
+    const { error } = await supabase.from("reports").insert({
+      reporter_id: currentUserId,
+      reported_id: reportModal.targetId,
+      reason: reportReason,
+    })
+    setReportLoading(false)
+    setReportModal({ open: false, targetId: null, targetName: "" })
+    setReportReason("")
+
+    if (error) {
+      showToast("Failed to submit report.", "error")
+      return
+    }
+
+    setLikers((prev) => prev.filter((profile) => profile.id !== reportModal.targetId))
+    setActivePhotoIndex(0)
+    showToast("Report submitted. Our moderators will review it.", "success")
+  }
+
+  const handleNextPhoto = (event: React.MouseEvent) => {
+    event.stopPropagation()
+    if (!current) return
+    const allPhotos = current.photos?.filter(Boolean) || []
+    const photoCount = allPhotos.length > 0 ? allPhotos.length : 1
+    if (activePhotoIndex < photoCount - 1) {
+      setActivePhotoIndex((prev) => prev + 1)
+    }
+  }
+
+  const handlePrevPhoto = (event: React.MouseEvent) => {
+    event.stopPropagation()
+    if (activePhotoIndex > 0) {
+      setActivePhotoIndex((prev) => prev - 1)
+    }
+  }
+
+  const handleCardTouchStart = (event: React.TouchEvent) => {
+    const touch = event.changedTouches[0]
+    if (!touch) return
+    setTouchStart({ x: touch.clientX, y: touch.clientY })
+  }
+
+  const handleCardTouchEnd = (event: React.TouchEvent) => {
+    if (!touchStart || !current) return
+
+    const touch = event.changedTouches[0]
+    if (!touch) return
+
+    const deltaX = touch.clientX - touchStart.x
+    const deltaY = touch.clientY - touchStart.y
+    const absX = Math.abs(deltaX)
+    const absY = Math.abs(deltaY)
+    const threshold = 60
+
+    setTouchStart(null)
+
+    if (Math.max(absX, absY) < threshold) return
+
+    if (absX >= absY) {
+      handleSwipe(deltaX > 0, deltaX > 0 ? "right" : "left")
+      return
+    }
+
+    if (deltaY < 0) {
+      if (window.confirm(`Super like ${current.real_name}?`)) {
+        handleSuperLike("up")
+      }
+      return
+    }
+
+    if (window.confirm(`Report ${current.real_name}?`)) {
+      setReportModal({ open: true, targetId: current.id, targetName: current.real_name })
     }
   }
 
@@ -173,276 +282,158 @@ export default function LikesPage() {
     )
   }
 
-  const activeLikers = getActiveList()
-  const current = activeLikers[0]
-  
   const avatar = current?.avatar_url
     || (current ? `https://api.dicebear.com/9.x/micah/svg?seed=${current.id}&backgroundColor=ffd700,ffa500` : "")
-
-  const allPhotos = current 
-    ? (current.photos || []).filter(Boolean) as string[]
-    : []
+  const allPhotos = current ? (current.photos || []).filter(Boolean) as string[] : []
   if (allPhotos.length === 0 && current) {
     allPhotos.push(avatar)
   }
 
-  const handleNextPhoto = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (activePhotoIndex < allPhotos.length - 1) {
-      setActivePhotoIndex(prev => prev + 1)
-    }
-  }
-
-  const handlePrevPhoto = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (activePhotoIndex > 0) {
-      setActivePhotoIndex(prev => prev - 1)
-    }
-  }
-
-  const intentBadges = (profile: Liker): string => {
-    const intents: string[] =
-      (profile.relationship_intents && profile.relationship_intents.length > 0)
-        ? profile.relationship_intents
-        : [profile.relationship_intent]
-    return intents
-      .map(i => {
-        if (i === "friendship") return "🤝 Friendship"
-        if (i === "dating") return "💛 Dating"
-        if (i === "casual") return "🔥 Casual"
-        return i
-      })
-      .join(" · ")
-  }
-
   return (
-    <div className="flex flex-col h-full overflow-hidden p-6 relative">
-      <div className="flex flex-col mb-6 gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold tracking-tight">People Who Liked You</h1>
-          <p className="text-sm text-muted-foreground">
-            {friendshipLikers.length + datingLikers.length + hookupLikers.length} total pending likes
-          </p>
-        </div>
+    <div className="flex h-full flex-col overflow-hidden p-4 sm:p-6">
+      <div className="flex-shrink-0 pb-3">
+        <div className="flex flex-col gap-4">
+          <div>
+            <h1 className="text-2xl font-extrabold tracking-tight">People Who Liked You</h1>
+            <p className="text-sm text-muted-foreground">{likers.length} total pending likes</p>
+          </div>
 
-        {/* Custom Tab Bar */}
-        <div className="flex p-1 bg-muted/40 rounded-xl border border-border/50 backdrop-blur-sm self-start sm:w-auto w-full">
-          <button
-            onClick={() => { setActiveTab("friendships"); setActivePhotoIndex(0); }}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-              activeTab === "friendships" 
-                ? "bg-background shadow-sm text-foreground" 
-                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-            }`}
-          >
-            Friendships
-            {friendshipLikers.length > 0 && (
-              <span className="bg-primary/10 text-primary text-[10px] px-1.5 py-0.5 rounded-full font-bold">
-                {friendshipLikers.length}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => { setActiveTab("dating"); setActivePhotoIndex(0); }}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-              activeTab === "dating" 
-                ? "bg-background shadow-sm text-foreground" 
-                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-            }`}
-          >
-            Dating
-            {datingLikers.length > 0 && (
-              <span className="bg-primary/10 text-primary text-[10px] px-1.5 py-0.5 rounded-full font-bold">
-                {datingLikers.length}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => { setActiveTab("hookups"); setActivePhotoIndex(0); }}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-              activeTab === "hookups" 
-                ? "bg-background shadow-sm text-foreground" 
-                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-            }`}
-          >
-            Hookups
-            {hookupLikers.length > 0 && (
-              <span className="bg-primary/10 text-primary text-[10px] px-1.5 py-0.5 rounded-full font-bold">
-                {hookupLikers.length}
-              </span>
-            )}
-          </button>
+          <div className="mx-auto grid w-full grid-cols-2 rounded-lg border bg-muted/35 p-1 lg:w-3/4">
+            {RELATIONSHIP_INTENTS.map((intent) => {
+              const count = groupedLikers[intent.value].length
+              return (
+                <button
+                  key={intent.value}
+                  type="button"
+                  onClick={() => {
+                    setActiveIntent(intent.value)
+                    setActivePhotoIndex(0)
+                  }}
+                  className={`flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition ${
+                    activeIntent === intent.value
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {formatRelationshipIntent(intent.value)}
+                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
+                    {count}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center relative overflow-hidden">
-        {activeLikers.length > 0 ? (
-          <>
-            <div className="w-full h-full max-w-5xl flex items-center justify-center gap-4 sm:gap-12 py-2 sm:py-6">
-              
-              {/* LEFT BUTTON (Pass) */}
-              <div className="flex flex-col items-center gap-4 sm:gap-6">
-                <button
-                  onClick={() => handleSwipe(false)}
-                  className="flex h-16 w-16 sm:h-20 sm:w-20 lg:h-24 lg:w-24 items-center justify-center rounded-full border-2 border-destructive text-destructive hover:bg-destructive/10 transition-transform hover:scale-110 active:scale-95"
-                  title="Pass"
-                >
-                  <X className="h-8 w-8 sm:h-10 sm:w-10 lg:h-12 lg:w-12" />
-                </button>
-              </div>
-
-              {/* CENTER PROFILE (9:16 aspect ratio) */}
-              <div
-                className={`relative w-full max-w-[360px] sm:max-w-none sm:w-auto h-auto sm:h-full max-h-[85vh] aspect-[9/16] overflow-hidden rounded-2xl bg-muted/30 border-2 shadow-2xl transition-all duration-350 shrink-0 ${
-                  current.isSuperLike ? "border-yellow-500/50 shadow-yellow-500/20" : "border-border/50"
-                } ${
-                  swipingId === current.id
-                    ? swipeDirection === "right"
-                      ? "animate-swipe-right"
-                      : "animate-swipe-left"
-                    : "opacity-100 scale-100"
-                }`}
+      <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden py-2 sm:py-3">
+        {current ? (
+          <div className="mx-auto flex w-full max-w-[1240px] items-center justify-center gap-3 px-2 sm:gap-4">
+            <div className="hidden flex-col items-center gap-4 md:flex">
+              <button
+                type="button"
+                onClick={() => handleSwipe(false, "left")}
+                className="flex size-16 items-center justify-center rounded-full border-2 border-destructive bg-background text-destructive shadow-lg transition hover:scale-105 hover:bg-destructive hover:text-black active:scale-95"
+                aria-label="Pass"
+                title="Pass"
               >
-                {/* Profile Photo as Background */}
-                <div className="absolute inset-0">
-                  <img
-                    src={allPhotos[activePhotoIndex]}
-                    alt={current.real_name}
-                    className="w-full h-full object-cover transition-opacity duration-200"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/80 pointer-events-none" />
-                </div>
-
-                {/* Story Indicators */}
-                {allPhotos.length > 1 && (
-                  <div className="absolute top-2 left-2 right-2 flex gap-1 z-20 pointer-events-none">
-                    {allPhotos.map((_, i) => (
-                      <div key={i} className={`h-1 flex-1 rounded-full bg-white/30 overflow-hidden`}>
-                        <div className={`h-full bg-white transition-all duration-300 ${i <= activePhotoIndex ? 'w-full' : 'w-0'}`} />
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Navigation tap targets */}
-                {allPhotos.length > 1 && (
-                  <div className="absolute inset-0 flex z-10 pt-10 pb-40">
-                    <div className="flex-1 cursor-pointer" onClick={handlePrevPhoto} />
-                    <div className="flex-1 cursor-pointer" onClick={handleNextPhoto} />
-                  </div>
-                )}
-
-                {/* Badges top left */}
-                <div className="absolute top-4 left-4 z-10 flex flex-col gap-2 pointer-events-none">
-                  {current.isSuperLike && (
-                    <span className="flex items-center gap-1.5 text-xs font-bold bg-yellow-500 text-yellow-950 shadow-lg rounded-full px-3 py-1 pointer-events-auto w-max">
-                      <Star className="h-3.5 w-3.5 fill-yellow-950" /> Super Liked You
-                    </span>
-                  )}
-                  <span className="text-xs font-semibold bg-background/80 text-foreground backdrop-blur-md rounded-full px-3 py-1 pointer-events-auto w-max">
-                    {intentBadges(current)}
-                  </span>
-                </div>
-
-                {/* Info Bottom */}
-                <div className="absolute bottom-0 inset-x-0 p-6 z-10 text-white pointer-events-none flex flex-col gap-2">
-                  <div className="flex items-end gap-3">
-                    <img 
-                       src={avatar} 
-                       className="w-14 h-14 rounded-full object-cover bg-muted/50 shadow-md"
-                       alt={`${current.username} avatar`}
-                    />
-                    <div className="flex flex-col gap-0.5 flex-1">
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-xl font-bold leading-none shadow-black drop-shadow-md">{current.real_name}</h2>
-                      </div>
-                      <p className="text-sm text-white/90 shadow-black drop-shadow-md font-medium">
-                        @{current.username} · {current.department} · {current.year} Year
-                      </p>
-                    </div>
-                  </div>
-
-                  {current.bio && (
-                    <p className="text-sm text-white/95 line-clamp-3 shadow-black drop-shadow-md">{current.bio}</p>
-                  )}
-
-                  {current.interest_tags && current.interest_tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {current.interest_tags.slice(0, 5).map(tag => (
-                        <span key={tag} className="text-xs bg-black/40 border border-white/20 rounded-full px-2.5 py-1 font-medium backdrop-blur-md">
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* RIGHT BUTTON (Like Back) */}
-              <div className="flex flex-col items-center gap-4 sm:gap-6">
-                <button
-                  onClick={() => handleSwipe(true)}
-                  className="flex h-16 w-16 sm:h-20 sm:w-20 lg:h-24 lg:w-24 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-transform hover:scale-110 active:scale-95 shadow-xl shadow-primary/20"
-                  title="Like Back"
-                >
-                  <Heart className="h-8 w-8 sm:h-10 sm:w-10 lg:h-12 lg:w-12" />
-                </button>
-              </div>
-
+                <X className="h-8 w-8" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setReportModal({ open: true, targetId: current.id, targetName: current.real_name })}
+                className="flex size-12 items-center justify-center rounded-full border border-destructive/40 bg-background text-destructive shadow-md transition hover:scale-105 hover:bg-destructive/10 active:scale-95"
+                aria-label="Report"
+                title="Report"
+              >
+                <Flag className="h-5 w-5" />
+              </button>
             </div>
-          </>
+
+            <div className="w-full max-w-4xl xl:max-w-5xl">
+              <ProfilePostCard
+                profile={current}
+                avatarUrl={avatar}
+                photos={allPhotos}
+                activePhotoIndex={activePhotoIndex}
+                onPrevPhoto={handlePrevPhoto}
+                onNextPhoto={handleNextPhoto}
+                swipeDirection={swipingId === current.id ? swipeDirection : null}
+                onTouchStart={handleCardTouchStart}
+                onTouchEnd={handleCardTouchEnd}
+              />
+            </div>
+
+            <div className="hidden flex-col items-center gap-4 md:flex">
+              <button
+                type="button"
+                onClick={() => handleSwipe(true, "right")}
+                className="flex size-16 items-center justify-center rounded-full border-2 border-primary bg-background text-primary shadow-lg transition hover:scale-105 hover:bg-primary hover:text-primary-foreground active:scale-95"
+                aria-label="Like back"
+                title="Like back"
+              >
+                <Heart className="h-8 w-8" />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSuperLike("up")}
+                className="flex size-12 items-center justify-center rounded-full border border-primary/40 bg-background text-primary shadow-md transition hover:scale-105 hover:bg-primary/10 active:scale-95"
+                aria-label="Super like"
+                title="Super like"
+              >
+                <Star className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
         ) : (
-          <div className="flex flex-col items-center justify-center text-center p-8 mt-4">
-            <div className="h-16 w-16 rounded-full flex items-center justify-center mb-4">
-              <Heart className="h-8 w-8 text-primary/40" />
+          <div className="flex flex-col items-center justify-center p-8 text-center">
+            <div className="mb-4 flex size-16 items-center justify-center rounded-full bg-muted">
+              <Heart className="h-8 w-8 text-primary/50" />
             </div>
-            <h3 className="text-lg font-bold">You're all caught up here!</h3>
-            <p className="mt-2 text-sm text-muted-foreground max-w-xs">
-              No pending {activeTab} likes. Check the other tabs or keep swiping on Discover.
+            <h3 className="text-lg font-bold">You're all caught up here</h3>
+            <p className="mt-2 max-w-xs text-sm text-muted-foreground">
+              No pending {formatRelationshipIntent(activeIntent).toLowerCase()} likes. Check the other group or keep discovering.
             </p>
-            <Button className="mt-5 rounded-xl" onClick={() => router.push("/discover")}>
+            <Button className="mt-5 rounded-lg" onClick={() => router.push("/discover")}>
               Go to Discover
             </Button>
           </div>
         )}
       </div>
 
-      {/* ── MATCH MODAL ── */}
       {matchModal.open && matchModal.matchedUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="animate-match-pop w-full max-w-sm overflow-hidden bg-background border border-border rounded-xl">
-            {/* Gradient header */}
-            <div className="relative bg-gradient-to-br from-primary/25 via-secondary/15 to-primary/10 p-8 pb-4 flex flex-col items-center">
-              {/* Pulse ring */}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="animate-match-pop w-full max-w-sm overflow-hidden rounded-lg border bg-background">
+            <div className="flex flex-col items-center bg-muted/40 p-8 pb-4">
               <div className="relative">
                 <div className="absolute inset-0 rounded-full bg-primary/30 animate-pulse-ring" />
-                <div className="h-24 w-24 rounded-full overflow-hidden border-4 border-primary relative z-10">
+                <div className="relative z-10 size-24 overflow-hidden rounded-full border-4 border-primary">
                   <img
                     src={matchModal.matchedUser.avatar_url || `https://api.dicebear.com/9.x/micah/svg?seed=${matchModal.matchedUser.id}`}
                     alt={matchModal.matchedUser.real_name}
-                    className="w-full h-full object-cover"
+                    className="h-full w-full object-cover"
                   />
                 </div>
               </div>
               <p className="mt-4 text-3xl font-extrabold tracking-tight">It's a Match!</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                You matched with <span className="font-semibold text-foreground">{matchModal.matchedUser.real_name}</span>!
+              <p className="mt-1 text-sm text-muted-foreground">
+                You matched with <span className="font-semibold text-foreground">{matchModal.matchedUser.real_name}</span>.
               </p>
             </div>
 
-            <div className="p-6 flex flex-col gap-3">
+            <div className="flex flex-col gap-3 p-6">
               <Button
-                className="w-full rounded-xl"
+                className="w-full rounded-lg"
                 onClick={() => {
                   setMatchModal({ open: false, matchedUser: null, matchId: null })
                   if (matchModal.matchId) router.push(`/chat/${matchModal.matchId}`)
                 }}
               >
-                💬 Start Chatting
+                Start Chatting
               </Button>
               <Button
                 variant="outline"
-                className="w-full rounded-xl"
+                className="w-full rounded-lg"
                 onClick={() => setMatchModal({ open: false, matchedUser: null, matchId: null })}
               >
                 Keep Reviewing Likes
@@ -452,6 +443,64 @@ export default function LikesPage() {
         </div>
       )}
 
+      {reportModal.open && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center">
+          <div className="w-full max-w-sm overflow-hidden rounded-lg border bg-background">
+            <div className="border-b p-5">
+              <h3 className="text-lg font-bold">Report {reportModal.targetName}</h3>
+              <p className="mt-1 text-sm text-muted-foreground">Help keep Kinder safe. Select a reason:</p>
+            </div>
+            <div className="flex max-h-64 flex-col gap-2 overflow-y-auto p-4">
+              {REPORT_REASONS.map((reason) => (
+                <button
+                  key={reason}
+                  onClick={() => setReportReason(reason)}
+                  className={`w-full rounded-lg border px-4 py-2.5 text-left text-sm transition-all ${
+                    reportReason === reason
+                      ? "border-destructive/50 bg-destructive/10 font-medium text-foreground"
+                      : "border-border bg-background hover:bg-muted/50"
+                  }`}
+                >
+                  {reason}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-3 border-t p-4">
+              <Button
+                variant="outline"
+                className="flex-1 rounded-lg"
+                onClick={() => {
+                  setReportModal({ open: false, targetId: null, targetName: "" })
+                  setReportReason("")
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                className="flex-1 rounded-lg"
+                onClick={handleReport}
+                disabled={!reportReason || reportLoading}
+              >
+                {reportLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Flag className="h-4 w-4" />}
+                Submit
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className={`fixed bottom-6 left-1/2 z-50 flex max-w-xs -translate-x-1/2 items-center gap-2 rounded-lg border px-5 py-3 text-center text-sm font-medium ${
+          toast.type === "success"
+            ? "border-primary/50 bg-primary text-primary-foreground"
+            : toast.type === "error"
+              ? "border-destructive/50 bg-destructive text-white"
+              : "border-border bg-background text-foreground"
+        }`}>
+          {toast.msg}
+        </div>
+      )}
     </div>
   )
 }

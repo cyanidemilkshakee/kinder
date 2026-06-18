@@ -6,18 +6,21 @@ import { createClient } from "@/lib/client"
 import { Button } from "@/components/ui/button"
 import {
   Loader2, AlertTriangle, Shield,
-  EyeOff, Eye, Flame, Trash2, KeyRound, Lock
+  EyeOff, Eye, Trash2, KeyRound, Lock, Tags, BookOpen, GraduationCap
 } from "lucide-react"
+import { DEPARTMENTS, DOESNT_MATTER, INTEREST_TAGS, YEARS } from "@/lib/profile-options"
 
 type ProfileSettings = {
   id: string
   is_visible: boolean
-  hookup_opt_in: boolean
-  hookup_opt_in_changed_at: string | null
   deletion_queued_at: string | null
-  date_of_birth: string | null
   has_password: boolean
+  interested_interests: string[] | null
+  interested_departments: string[] | null
+  interested_years: string[] | null
 }
+
+type PreferenceKey = "interested_interests" | "interested_departments" | "interested_years"
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<ProfileSettings | null>(null)
@@ -48,7 +51,7 @@ export default function SettingsPage() {
 
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, is_visible, hookup_opt_in, hookup_opt_in_changed_at, deletion_queued_at, date_of_birth, has_password")
+        .select("id, is_visible, deletion_queued_at, has_password, interested_interests, interested_departments, interested_years")
         .eq("id", user.id)
         .single()
 
@@ -64,21 +67,7 @@ export default function SettingsPage() {
   const updateSetting = async (key: keyof ProfileSettings, value: any) => {
     if (!settings) return
 
-    // PRD: Hookup intent 24hr cooldown check
-    if (key === 'hookup_opt_in' && settings.hookup_opt_in_changed_at) {
-      const lastChanged = new Date(settings.hookup_opt_in_changed_at)
-      const now = new Date()
-      const hoursDiff = (now.getTime() - lastChanged.getTime()) / (1000 * 60 * 60)
-      if (hoursDiff < 24) {
-        showToast(`You can only change this once every 24 hours. Try again later.`, "error")
-        return
-      }
-    }
-
     const updates: any = { [key]: value }
-    if (key === 'hookup_opt_in') {
-      updates.hookup_opt_in_changed_at = new Date().toISOString()
-    }
 
     setSettings({ ...settings, ...updates })
     setSaving(true)
@@ -171,6 +160,19 @@ export default function SettingsPage() {
     }
   }
 
+  const togglePreference = (key: PreferenceKey, value: string) => {
+    if (!settings) return
+    const current = settings[key] || []
+    const next = current.includes(value)
+      ? current.filter((item) => item !== value)
+      : [...current, value]
+    updateSetting(key, next)
+  }
+
+  const setPreferenceDoesntMatter = (key: PreferenceKey) => {
+    updateSetting(key, [])
+  }
+
   if (loading || !settings) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -180,16 +182,6 @@ export default function SettingsPage() {
   }
 
   const isDeletionQueued = !!settings.deletion_queued_at
-
-  // Calculate age for minor check
-  let isMinor = false
-  if (settings.date_of_birth) {
-    const dob = new Date(settings.date_of_birth)
-    const ageDiffMs = Date.now() - dob.getTime()
-    const ageDate = new Date(ageDiffMs)
-    isMinor = Math.abs(ageDate.getUTCFullYear() - 1970) < 18
-  }
-
 
   return (
     <div className="flex flex-col h-full min-h-0 overflow-y-auto">
@@ -331,32 +323,123 @@ export default function SettingsPage() {
                   </Button>
                 </div>
 
-                {/* Hookup Opt-In Toggle */}
-                <div className={`flex items-start justify-between transition-all gap-4 ${isMinor ? 'opacity-50' : ''}`}>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Flame className={`h-4 w-4 flex-shrink-0 ${settings.hookup_opt_in ? 'text-orange-500' : 'text-muted-foreground'}`} />
-                      <h4 className="font-semibold text-sm">Casual / Hookup Intent</h4>
-                      {isMinor && <span className="text-[10px] bg-destructive/10 text-destructive px-2 py-0.5 rounded-full font-bold uppercase">Restricted</span>}
+              </section>
+
+              {/* Interested In */}
+              <section className="space-y-5">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground border-b border-border/50 pb-2">Interested In</h3>
+
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Tags className="h-4 w-4 text-primary" />
+                      <h4 className="font-semibold text-sm">Interests</h4>
                     </div>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      Strictly mutual opt-in. If enabled, you will see others looking for casual encounters, and they will see you.
-                      {!isMinor && <span className="block mt-1 font-medium text-orange-500/80">Can only be toggled once every 24 hours.</span>}
-                      {isMinor && <span className="block mt-1 font-medium text-destructive">Must be 18+ to enable this feature.</span>}
-                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPreferenceDoesntMatter("interested_interests")}
+                        className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${
+                          (settings.interested_interests || []).length === 0
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                        }`}
+                      >
+                        {DOESNT_MATTER}
+                      </button>
+                      {INTEREST_TAGS.map((interest) => {
+                        const selected = (settings.interested_interests || []).includes(interest)
+                        return (
+                          <button
+                            key={interest}
+                            type="button"
+                            onClick={() => togglePreference("interested_interests", interest)}
+                            className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${
+                              selected
+                                ? "border-primary bg-primary/10 text-primary"
+                                : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                            }`}
+                          >
+                            {interest}
+                          </button>
+                        )
+                      })}
+                    </div>
                   </div>
-                  <button
-                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 mt-0.5 ${settings.hookup_opt_in ? 'bg-orange-500' : 'bg-muted-foreground/30'} ${isMinor ? 'cursor-not-allowed' : ''}`}
-                    onClick={() => {
-                      if (isMinor) return
-                      updateSetting('hookup_opt_in', !settings.hookup_opt_in)
-                    }}
-                    disabled={isMinor}
-                    role="switch"
-                    aria-checked={settings.hookup_opt_in}
-                  >
-                    <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${settings.hookup_opt_in ? 'translate-x-5' : 'translate-x-0'}`} />
-                  </button>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <BookOpen className="h-4 w-4 text-primary" />
+                      <h4 className="font-semibold text-sm">Branches</h4>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPreferenceDoesntMatter("interested_departments")}
+                        className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${
+                          (settings.interested_departments || []).length === 0
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                        }`}
+                      >
+                        {DOESNT_MATTER}
+                      </button>
+                      {DEPARTMENTS.map((department) => {
+                        const selected = (settings.interested_departments || []).includes(department)
+                        return (
+                          <button
+                            key={department}
+                            type="button"
+                            onClick={() => togglePreference("interested_departments", department)}
+                            className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${
+                              selected
+                                ? "border-primary bg-primary/10 text-primary"
+                                : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                            }`}
+                          >
+                            {department}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <GraduationCap className="h-4 w-4 text-primary" />
+                      <h4 className="font-semibold text-sm">Years</h4>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPreferenceDoesntMatter("interested_years")}
+                        className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${
+                          (settings.interested_years || []).length === 0
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                        }`}
+                      >
+                        {DOESNT_MATTER}
+                      </button>
+                      {YEARS.map((year) => {
+                        const selected = (settings.interested_years || []).includes(year)
+                        return (
+                          <button
+                            key={year}
+                            type="button"
+                            onClick={() => togglePreference("interested_years", year)}
+                            className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${
+                              selected
+                                ? "border-primary bg-primary/10 text-primary"
+                                : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                            }`}
+                          >
+                            {year} Year
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
                 </div>
               </section>
 

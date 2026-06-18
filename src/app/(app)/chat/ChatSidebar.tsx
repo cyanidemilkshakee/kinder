@@ -15,6 +15,7 @@ type Match = {
   }
   last_message: string | null
   last_message_at: string | null
+  unread_count: number
 }
 
 function timeAgo(dateStr: string): string {
@@ -38,10 +39,10 @@ export function ChatSidebar() {
   useEffect(() => {
     fetchMatches()
 
-    // Subscribe to new messages to update last message preview
+    // Subscribe to new messages and updates to update last message preview and read status
     const channel = supabase
       .channel("chat-sidebar-messages")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, () => {
+      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => {
         fetchMatches()
       })
       .subscribe()
@@ -79,11 +80,19 @@ export function ChatSidebar() {
             .limit(1)
             .maybeSingle()
 
+          const { count: unreadCount } = await supabase
+            .from("messages")
+            .select("*", { count: "exact", head: true })
+            .eq("match_id", m.id)
+            .eq("is_read", false)
+            .neq("sender_id", user.id)
+
           return {
             id: m.id,
             other_user: otherUser,
             last_message: lastMsg?.content || null,
             last_message_at: lastMsg?.created_at || null,
+            unread_count: unreadCount || 0,
           }
         })
       )
@@ -136,14 +145,23 @@ export function ChatSidebar() {
                   </div>
                   <div className="overflow-hidden flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-1">
-                      <h3 className="font-semibold text-sm truncate">{match.other_user.real_name}</h3>
-                      {match.last_message_at && (
-                        <span className="text-xs text-muted-foreground flex-shrink-0">
-                          {timeAgo(match.last_message_at)}
-                        </span>
-                      )}
+                      <h3 className={`text-sm truncate ${match.unread_count > 0 ? "font-bold text-foreground" : "font-semibold"}`}>
+                        {match.other_user.real_name}
+                      </h3>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {match.unread_count > 0 && (
+                          <span className="inline-flex items-center justify-center rounded-full bg-red-500 min-w-4 h-4 px-1 text-[10px] font-bold text-white leading-none">
+                            {match.unread_count}
+                          </span>
+                        )}
+                        {match.last_message_at && (
+                          <span className={`text-xs ${match.unread_count > 0 ? "text-primary font-medium" : "text-muted-foreground"}`}>
+                            {timeAgo(match.last_message_at)}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <p className="text-xs text-muted-foreground truncate mt-0.5">
+                    <p className={`text-xs truncate mt-0.5 ${match.unread_count > 0 ? "font-semibold text-foreground" : "text-muted-foreground"}`}>
                       {match.last_message || "Tap to start chatting ✨"}
                     </p>
                   </div>

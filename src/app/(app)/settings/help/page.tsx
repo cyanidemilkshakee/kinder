@@ -3,7 +3,7 @@
 
 import { useState } from "react"
 import type { LucideIcon } from "lucide-react"
-import { ArrowLeft, HelpCircle, ChevronDown, ChevronUp, Heart, MessageCircle, Shield, Eye, Flame, ScrollText, Trash2, User } from "lucide-react"
+import { ArrowLeft, HelpCircle, ChevronDown, ChevronUp, Heart, MessageCircle, Shield, Eye, ScrollText, Trash2, User } from "lucide-react"
 import Link from "next/link"
 
 type FAQ = {
@@ -101,26 +101,6 @@ const sections: Section[] = [
     ],
   },
   {
-    icon: Flame,
-    title: "Casual / Hookup Intent",
-    color: "text-orange-500",
-    bg: "bg-orange-500/10",
-    faqs: [
-      {
-        q: "What is the Casual / Hookup Intent toggle?",
-        a: "This is a strictly opt-in feature. When enabled, you'll appear in a separate pool visible only to others who have also opted in. Mutual opt-in is required before you can see each other.",
-      },
-      {
-        q: "Can I change this setting anytime?",
-        a: "You can toggle it, but only once every 24 hours. This limit is to prevent abuse and ensure intentional choices.",
-      },
-      {
-        q: "Is this available to everyone?",
-        a: "No - this feature is restricted to users who are 18 or older, as verified by their date of birth during onboarding.",
-      },
-    ],
-  },
-  {
     icon: Shield,
     title: "Privacy & Safety",
     color: "text-zinc-400",
@@ -188,7 +168,7 @@ export default function HelpPage() {
   return (
     <div className="flex flex-col h-full min-h-0 overflow-y-auto">
       <div className="flex-1 p-6 md:p-12">
-        <div className="w-full max-w-2xl mx-auto space-y-12">
+        <div className="w-full max-w-2xl text-left space-y-12">
 
           {/* Header */}
           <div className="space-y-6">
@@ -200,7 +180,6 @@ export default function HelpPage() {
             </Link>
             
             <div className="space-y-4">
-              <HelpCircle className="h-10 w-10 text-emerald-500 mb-2" />
               <h2 className="text-3xl font-extrabold tracking-tight">Help &amp; Support</h2>
               <p className="text-sm text-muted-foreground">Everything you need to know about Kinder.</p>
             </div>

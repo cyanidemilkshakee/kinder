@@ -12,6 +12,7 @@ type Message = {
   content: string
   sender_id: string
   created_at: string
+  is_read?: boolean
 }
 
 export default function ChatPage({ params }: { params: Promise<{ id: string }> }) {
@@ -30,31 +31,49 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    setupChat()
+    let channel: any
+    let isMounted = true
 
-    // Subscribe to new messages
-    const channel = supabase
-      .channel(`chat-${chatId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `match_id=eq.${chatId}`
-        },
-        (payload) => {
-          setMessages((prev) => {
-            if (prev.some(m => m.id === payload.new.id)) return prev
-            return [...prev, payload.new as Message]
-          })
-          setTimeout(scrollToBottom, 50)
-        }
-      )
-      .subscribe()
+    const init = async () => {
+      const user = await setupChat()
+      if (!user || !isMounted) return
+
+      // Subscribe to new messages
+      channel = supabase
+        .channel(`chat-${chatId}-${Date.now()}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages',
+            filter: `match_id=eq.${chatId}`
+          },
+          (payload) => {
+            setMessages((prev) => {
+              if (prev.some(m => m.id === payload.new.id)) return prev
+              return [...prev, payload.new as Message]
+            })
+            setTimeout(scrollToBottom, 50)
+
+            // If we receive a message from the other person while in this chat, mark it as read immediately
+            if (payload.new.sender_id !== user.id) {
+              supabase
+                .from("messages")
+                .update({ is_read: true })
+                .eq("id", payload.new.id)
+                .then()
+            }
+          }
+        )
+        .subscribe()
+    }
+
+    init()
 
     return () => {
-      supabase.removeChannel(channel)
+      isMounted = false
+      if (channel) supabase.removeChannel(channel)
     }
   }, [chatId])
 
@@ -64,7 +83,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   async function setupChat() {
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { router.push("/"); return }
+    if (!user) { router.push("/"); return null }
     setCurrentUserId(user.id)
 
     // Fetch match info to get other user's name
@@ -98,8 +117,20 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     if (messageData) {
       setMessages(messageData)
       setTimeout(scrollToBottom, 100)
+
+      // Mark unread messages as read
+      const hasUnread = messageData.some((m: any) => m.sender_id !== user.id && !m.is_read)
+      if (hasUnread) {
+        await supabase
+          .from("messages")
+          .update({ is_read: true })
+          .eq("match_id", chatId)
+          .neq("sender_id", user.id)
+          .eq("is_read", false)
+      }
     }
     setLoading(false)
+    return user
   }
 
   const sendContent = async (content: string) => {

@@ -16,7 +16,7 @@ const policySections: PolicySection[] = [
     title: "1. Who We Are",
     content: (
       <p>
-        Kinder ("Kinder", "we", "us", or "our") is a campus-exclusive social platform
+        Kinder is a campus-exclusive social platform
         operated for college students. We are not affiliated with college administration.
         This Privacy Policy explains how we collect, use, and protect your personal
         information when you use the Kinder platform.
@@ -28,7 +28,7 @@ const policySections: PolicySection[] = [
     content: (
       <ul className="list-disc list-inside space-y-2">
         <li><strong>Account Information:</strong> Your college email address, used for verification and authentication.</li>
-        <li><strong>Profile Information:</strong> Your real name, gender, department, year of study, date of birth, bio, interest tags, and profile photo.</li>
+        <li><strong>Profile Information:</strong> Your real name, gender, department, year of study, date of birth, bio, food and habit preferences, interest tags, and profile photo.</li>
         <li><strong>Usage Data:</strong> Profile views, swipe activity (likes/passes), match events, and chat messages.</li>
         <li><strong>Confessions:</strong> Anonymous text posts submitted to the Confessions feed.</li>
         <li><strong>Support Messages:</strong> Messages and bug reports you send to us through the Contact Us form.</li>
@@ -42,7 +42,7 @@ const policySections: PolicySection[] = [
       <ul className="list-disc list-inside space-y-2">
         <li>To create and maintain your account and profile.</li>
         <li>To facilitate matching, chat, and discovery features.</li>
-        <li>To enforce eligibility restrictions (e.g., 18+ for casual intent).</li>
+        <li>To maintain a safer campus-only discovery and matching experience.</li>
         <li>To moderate confessions and respond to reports.</li>
         <li>To respond to support requests and bug reports.</li>
         <li>To improve platform performance, security, and features.</li>
@@ -108,13 +108,12 @@ const policySections: PolicySection[] = [
     ),
   },
   {
-    title: "9. Minors",
+    title: "9. Eligibility",
     content: (
       <p>
         Kinder is intended for college students and requires a college email for sign-up.
-        Certain features (Casual / Hookup Intent) are restricted to users aged 18 and above,
-        verified by date of birth during onboarding. If we become aware that a minor has
-        misrepresented their age, we will suspend their account.
+        If we become aware that someone has misrepresented their eligibility, we may
+        suspend their account.
       </p>
     ),
   },
@@ -148,7 +147,7 @@ export default function PrivacyPolicyPage() {
   return (
     <div className="flex flex-col h-full min-h-0 overflow-y-auto">
       <div className="flex-1 p-6 md:p-12">
-        <div className="w-full max-w-2xl mx-auto space-y-12">
+        <div className="w-full max-w-2xl text-left space-y-12">
 
           {/* Header */}
           <div className="space-y-6">
@@ -160,7 +159,6 @@ export default function PrivacyPolicyPage() {
             </Link>
             
             <div className="space-y-4">
-              <FileText className="h-10 w-10 text-violet-500 mb-2" />
               <h2 className="text-3xl font-extrabold tracking-tight">Privacy Policy</h2>
               <p className="text-sm text-muted-foreground">Last updated: {LAST_UPDATED}</p>
             </div>

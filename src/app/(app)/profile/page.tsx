@@ -4,10 +4,20 @@
 import { useEffect, useState, useRef } from "react"
 import { createClient } from "@/lib/client"
 import { Button } from "@/components/ui/button"
-import { Camera, Loader2, Plus, X, User } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import { isValidUsername, normalizeUsername, usernameGuidance } from "@/lib/username"
 import Cropper from "react-easy-crop"
 import getCroppedImg from "@/lib/cropImage"
+import {
+  DEFAULT_DISCLOSURE_HABIT,
+  DEFAULT_FOOD_HABIT,
+  DRINKING_HABIT_OPTIONS,
+  FOOD_HABIT_OPTIONS,
+  INTEREST_TAGS,
+  RELATIONSHIP_INTENTS,
+  SMOKING_HABIT_OPTIONS,
+  normalizeRelationshipIntents,
+} from "@/lib/profile-options"
 
 type Profile = {
   id: string
@@ -22,9 +32,12 @@ type Profile = {
   avatar_url: string | null
   photos: string[]
   interest_tags: string[] | null
+  food_preference: string | null
+  drinking_habit: string | null
+  smoking_habit: string | null
 }
 
-const COMMON_TAGS = ["Anime", "Gym", "Coding", "Music", "Photography", "Gaming", "Sports", "Art", "Travel"]
+const COMMON_TAGS = INTEREST_TAGS.slice(0, 9)
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null)
@@ -65,17 +78,15 @@ export default function ProfilePage() {
         .single()
 
       if (error) throw error
-      const intents: string[] =
-        data.relationship_intents && data.relationship_intents.length > 0
-          ? data.relationship_intents
-          : data.relationship_intent
-          ? [data.relationship_intent]
-          : ["friendship"]
+      const intents = normalizeRelationshipIntents(data.relationship_intents, data.relationship_intent)
       setProfile({ 
         ...data, 
         username: data.username || "", 
         interest_tags: data.interest_tags || [], 
         relationship_intents: intents,
+        food_preference: data.food_preference || DEFAULT_FOOD_HABIT,
+        drinking_habit: data.drinking_habit || DEFAULT_DISCLOSURE_HABIT,
+        smoking_habit: data.smoking_habit || DEFAULT_DISCLOSURE_HABIT,
         photos: data.photos || []
       })
     } catch (error) {
@@ -111,6 +122,7 @@ export default function ProfilePage() {
         return
       }
 
+      const relationshipIntents = normalizeRelationshipIntents(profile.relationship_intents, profile.relationship_intent)
       const basePayload = {
         username: normalizedUsername,
         real_name: profile.real_name,
@@ -118,21 +130,26 @@ export default function ProfilePage() {
         year: profile.year,
         gender: profile.gender,
         bio: profile.bio,
-        relationship_intent: profile.relationship_intents[0] ?? "friendship",
+        relationship_intent: relationshipIntents[0] ?? "friendship",
+        relationship_intents: relationshipIntents,
         interest_tags: profile.interest_tags,
+        food_preference: profile.food_preference || DEFAULT_FOOD_HABIT,
+        drinking_habit: profile.drinking_habit || DEFAULT_DISCLOSURE_HABIT,
+        smoking_habit: profile.smoking_habit || DEFAULT_DISCLOSURE_HABIT,
       }
 
       let { error } = await supabase
         .from("profiles")
-        .update({ ...basePayload, relationship_intents: profile.relationship_intents })
+        .update(basePayload)
         .eq("id", profile.id)
 
       if (error) {
         const msg: string = (error as any).message ?? JSON.stringify(error)
         if (msg.includes("relationship_intents") || msg.includes("column")) {
+          const { relationship_intents, food_preference, drinking_habit, smoking_habit, ...legacyPayload } = basePayload
           const fallback = await supabase
             .from("profiles")
-            .update(basePayload)
+            .update(legacyPayload)
             .eq("id", profile.id)
           if (fallback.error) throw fallback.error
         } else {
@@ -140,7 +157,7 @@ export default function ProfilePage() {
         }
       }
 
-      setProfile({ ...profile, username: normalizedUsername })
+      setProfile({ ...profile, username: normalizedUsername, relationship_intents: relationshipIntents })
       showToast("Profile updated successfully!")
     } catch (err: any) {
       const msg: string = err?.message ?? err?.details ?? JSON.stringify(err)
@@ -257,12 +274,9 @@ export default function ProfilePage() {
           
           {/* Header */}
           <div className="space-y-6">
-            <div className="flex items-center gap-4">
-              <User className="h-10 w-10 text-primary mb-2" />
-              <div>
-                <h2 className="text-3xl font-extrabold tracking-tight">Edit Profile</h2>
-                <p className="text-sm text-muted-foreground pt-2">Manage your identity and how others see you.</p>
-              </div>
+            <div>
+              <h2 className="text-3xl font-extrabold tracking-tight">Edit Profile</h2>
+              <p className="text-sm text-muted-foreground pt-2">Manage your identity and how others see you.</p>
             </div>
           </div>
 
@@ -294,11 +308,11 @@ export default function ProfilePage() {
                 </div>
                 <button 
                   onClick={() => triggerFileInput(-1)}
-                  className="absolute bottom-1 right-1 bg-primary text-primary-foreground p-2.5 rounded-full shadow-lg hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
+                  className="absolute bottom-1 right-1 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-lg transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
                   disabled={uploading}
                   title="Change photo"
                 >
-                  <Camera className="h-5 w-5" />
+                  Change
                 </button>
               </div>
               <p className="text-xs text-muted-foreground mt-4 font-medium">Main Profile Photo (DP)</p>
@@ -312,7 +326,7 @@ export default function ProfilePage() {
                 {[0, 1, 2, 3, 4].map((index) => {
                   const photoUrl = profile.photos[index]
                   return (
-                    <div key={index} className="aspect-[9/16] relative rounded-xl border-2 border-dashed border-border/60 bg-muted/20 overflow-hidden group hover:bg-muted/40 transition-colors">
+                    <div key={index} className="aspect-[4/5] relative rounded-xl border-2 border-dashed border-border/60 bg-muted/20 overflow-hidden group hover:bg-muted/40 transition-colors">
                       {photoUrl ? (
                         <>
                           <img src={photoUrl} className="w-full h-full object-cover" />
@@ -320,18 +334,18 @@ export default function ProfilePage() {
                             <button 
                               type="button"
                               onClick={() => triggerFileInput(index)} 
-                              className="bg-white/20 hover:bg-white/40 text-white rounded-full p-2 transition-colors"
+                              className="rounded-full bg-white/20 px-2.5 py-1 text-xs font-semibold text-white transition-colors hover:bg-white/40"
                               title="Replace"
                             >
-                              <Camera className="w-4 h-4" />
+                              Replace
                             </button>
                             <button 
                               type="button"
                               onClick={() => removePhoto(index)} 
-                              className="bg-destructive/80 hover:bg-destructive text-white rounded-full p-2 transition-colors"
+                              className="rounded-full bg-destructive/80 px-2.5 py-1 text-xs font-semibold text-white transition-colors hover:bg-destructive"
                               title="Remove"
                             >
-                              <X className="w-4 h-4" />
+                              Remove
                             </button>
                           </div>
                         </>
@@ -342,7 +356,7 @@ export default function ProfilePage() {
                           className="w-full h-full flex flex-col items-center justify-center text-muted-foreground hover:text-primary transition-colors disabled:opacity-50"
                           disabled={index > profile.photos.length} // Force them to fill sequentially
                         >
-                          <Plus className="w-6 h-6 mb-1" />
+                          <span className="text-xs font-semibold">Add</span>
                         </button>
                       )}
                     </div>
@@ -448,6 +462,54 @@ export default function ProfilePage() {
                   />
                 </div>
 
+                <div className="space-y-3">
+                  <label className="text-sm font-semibold block">Food & Habits</label>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Food
+                      </label>
+                      <select
+                        value={profile.food_preference || DEFAULT_FOOD_HABIT}
+                        onChange={e => setProfile({...profile, food_preference: e.target.value})}
+                        className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
+                      >
+                        {FOOD_HABIT_OPTIONS.map(option => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Drinking
+                      </label>
+                      <select
+                        value={profile.drinking_habit || DEFAULT_DISCLOSURE_HABIT}
+                        onChange={e => setProfile({...profile, drinking_habit: e.target.value})}
+                        className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
+                      >
+                        {DRINKING_HABIT_OPTIONS.map(option => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Smoking
+                      </label>
+                      <select
+                        value={profile.smoking_habit || DEFAULT_DISCLOSURE_HABIT}
+                        onChange={e => setProfile({...profile, smoking_habit: e.target.value})}
+                        className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
+                      >
+                        {SMOKING_HABIT_OPTIONS.map(option => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   <label className="text-sm font-semibold flex justify-between">
                     <span>Interests (Max 5)</span>
@@ -461,7 +523,8 @@ export default function ProfilePage() {
                         <span key={tag} className="inline-flex items-center gap-1 bg-primary/10 text-primary border border-primary/25 px-3 py-1 rounded-full text-sm font-semibold">
                           {tag}
                           <button type="button" onClick={() => removeTag(tag)} className="text-primary/60 hover:text-destructive transition-colors ml-0.5">
-                            <X className="h-3.5 w-3.5" />
+                            <span aria-hidden="true">x</span>
+                            <span className="sr-only">Remove {tag}</span>
                           </button>
                         </span>
                       ))}
@@ -486,7 +549,7 @@ export default function ProfilePage() {
                       onClick={() => addTag(newTag)}
                       disabled={!newTag.trim() || (profile.interest_tags || []).length >= 5}
                     >
-                      <Plus className="h-4 w-4" />
+                      Add
                     </Button>
                   </div>
                   
@@ -510,11 +573,7 @@ export default function ProfilePage() {
                   <label className="text-sm font-semibold block">Relationship Intent</label>
                   <p className="text-[11px] text-muted-foreground">Select all that apply - at least one required.</p>
                   <div className="flex flex-wrap gap-2 pt-1">
-                    {([
-                      { value: "friendship", emoji: "🤝", label: "Friendship" },
-                      { value: "dating",     emoji: "💛", label: "Dating" },
-                      { value: "casual",     emoji: "🔥", label: "Casual" },
-                    ] as const).map(({ value, emoji, label }) => {
+                    {RELATIONSHIP_INTENTS.map(({ value, label }) => {
                       const selected = profile.relationship_intents.includes(value)
                       return (
                         <button
@@ -535,15 +594,11 @@ export default function ProfilePage() {
                               : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
                           }`}
                         >
-                          <span>{emoji}</span>
                           {label}
                         </button>
                       )
                     })}
                   </div>
-                  <p className="text-[11px] text-muted-foreground mt-1 bg-muted/50 p-2 rounded-lg">
-                    Note: If you select Casual, you still need to explicitly opt-in to hookup visibility in <a href="/settings" className="underline text-primary">Settings</a> for it to take effect.
-                  </p>
                 </div>
               </div>
 
@@ -570,7 +625,8 @@ export default function ProfilePage() {
                 className="p-1 rounded-full hover:bg-muted transition-colors"
                 disabled={uploading}
               >
-                <X className="w-5 h-5"/>
+                <span aria-hidden="true">x</span>
+                <span className="sr-only">Close</span>
               </button>
             </div>
             <div className="relative h-[60vh] w-full bg-black/90">
@@ -578,7 +634,7 @@ export default function ProfilePage() {
                 image={photoToCrop.url}
                 crop={crop}
                 zoom={zoom}
-                aspect={9 / 16}
+                aspect={4 / 5}
                 onCropChange={setCrop}
                 onCropComplete={(_, croppedAreaPixels) => setCroppedAreaPixels(croppedAreaPixels)}
                 onZoomChange={setZoom}

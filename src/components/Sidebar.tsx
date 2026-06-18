@@ -21,8 +21,13 @@ export function Sidebar() {
   const supabase = createClient()
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+  const [unreadChatCount, setUnreadChatCount] = useState(0)
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
 
   useEffect(() => {
+    let isMounted = true
+    let channel: any
+
     const fetchUser = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
@@ -31,9 +36,43 @@ export function Sidebar() {
         .select('id, real_name, username, avatar_url')
         .eq('id', user.id)
         .single()
-      if (data) setUserProfile(data)
+      if (data && isMounted) setUserProfile(data)
+
+      if (!isMounted) return
+
+      const fetchUnreadCount = async () => {
+        const { count } = await supabase
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('is_read', false)
+          .neq('sender_id', user.id)
+        if (count !== null && isMounted) setUnreadChatCount(count)
+      }
+
+      // Fetch initial unread count
+      await fetchUnreadCount()
+
+      if (!isMounted) return
+
+      // Listen for new messages globally
+      channel = supabase
+        .channel(`global-chat-notifications-${Date.now()}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, async (payload) => {
+          fetchUnreadCount() // Always re-calculate on any insert/update
+          
+          if (payload.eventType === 'INSERT' && payload.new.sender_id !== user.id && !payload.new.is_read) {
+            const { data: sender } = await supabase.from('profiles').select('real_name').eq('id', payload.new.sender_id).single()
+            setToastMessage(`New message from ${sender?.real_name || 'Someone'}`)
+            setTimeout(() => setToastMessage(null), 3500)
+          }
+        })
+        .subscribe()
     }
     fetchUser()
+    return () => {
+      isMounted = false
+      if (channel) supabase.removeChannel(channel)
+    }
   }, [])
 
   useEffect(() => {
@@ -97,11 +136,26 @@ export function Sidebar() {
                 }`}
                 aria-hidden="true"
               />
-              <span className="tracking-wide">{item.name}</span>
+              <span className="tracking-wide flex-1">{item.name}</span>
+              {item.name === "Chat" && unreadChatCount > 0 && (
+                <span className="ml-auto inline-flex items-center justify-center rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white shadow-sm">
+                  {unreadChatCount}
+                </span>
+              )}
             </Link>
           )
         })}
       </nav>
+
+      {/* Global Toast */}
+      {toastMessage && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-bottom-5">
+          <div className="rounded-full bg-sidebar-primary text-sidebar-primary-foreground px-6 py-3 shadow-xl text-sm font-semibold tracking-wide flex items-center gap-3">
+            <MessageCircle className="h-5 w-5" />
+            {toastMessage}
+          </div>
+        </div>
+      )}
 
       {/* Divider with label */}
       <div className="relative px-5 py-1">

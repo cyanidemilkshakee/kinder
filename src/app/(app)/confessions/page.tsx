@@ -5,7 +5,7 @@ import { useEffect, useState } from "react"
 import { createClient } from "@/lib/client"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
-import { ScrollText, Send, Info, Loader2 } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import { isValidUsername, normalizeUsername, usernameGuidance } from "@/lib/username"
 
 type Confession = {
@@ -147,9 +147,6 @@ export default function ConfessionsPage() {
       <div className="w-full">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6 px-2">
-          <div className="h-10 w-10 rounded-xl flex items-center justify-center">
-            <ScrollText className="h-5 w-5 text-primary" />
-          </div>
           <div>
             <h1 className="text-2xl font-extrabold tracking-tight">Confessions</h1>
             <p className="text-sm text-muted-foreground">Anonymous expression, moderated for safety.</p>
@@ -157,7 +154,7 @@ export default function ConfessionsPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex p-1 mb-6 gap-1">
+        <div className="sticky top-0 z-20 mx-auto mb-6 flex w-full gap-1 rounded-lg border bg-background/95 p-1 backdrop-blur lg:w-3/4">
           <button
             onClick={() => setActiveTab("receive")}
             className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${
@@ -182,7 +179,7 @@ export default function ConfessionsPage() {
 
         {/* Receive Tab */}
         {activeTab === "receive" && (
-          <div className="space-y-4">
+          <div className="mx-auto w-full space-y-4 lg:w-3/4">
             {loading ? (
               <div className="flex justify-center py-12">
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -210,9 +207,6 @@ export default function ConfessionsPage() {
                     </>
                   ) : (
                     <div className="flex flex-col items-center justify-center text-center py-4">
-                      <div className="h-12 w-12 rounded-full flex items-center justify-center mb-3">
-                        <ScrollText className="h-6 w-6 text-primary" />
-                      </div>
                       <h4 className="font-semibold text-sm">You have an anonymous confession!</h4>
                       <p className="text-xs text-muted-foreground mt-1 mb-4">Accept to reveal the message.</p>
                       <Button onClick={() => revealConfession(c.id)} className="rounded-xl w-full max-w-[200px]" size="sm">
@@ -224,9 +218,6 @@ export default function ConfessionsPage() {
               ))
             ) : (
               <div className="flex flex-col items-center justify-center py-16 text-center">
-                <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
-                  <ScrollText className="h-8 w-8 text-muted-foreground/50" />
-                </div>
                 <h3 className="text-lg font-bold">No Confessions Yet</h3>
                 <p className="text-sm text-muted-foreground mt-1 max-w-[250px]">
                   When someone sends you an approved anonymous message, it will appear here.
@@ -238,14 +229,7 @@ export default function ConfessionsPage() {
 
         {/* Send Tab */}
         {activeTab === "send" && (
-          <div className="p-6">
-            <div className="flex items-start gap-3 p-4 bg-primary/10 border border-primary/20 rounded-xl mb-6 text-sm text-foreground">
-              <Info className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-              <p>
-                Confessions are <strong>100% anonymous</strong>. All messages are manually reviewed by moderation before delivery to prevent abuse.
-              </p>
-            </div>
-
+          <div className="mx-auto w-full p-6 lg:w-3/4">
             <form onSubmit={handleSend} className="space-y-5">
               <div className="space-y-1.5">
                 <label className="text-sm font-semibold">Recipient Username</label>
@@ -283,11 +267,7 @@ export default function ConfessionsPage() {
                 className="w-full rounded-xl gap-2" 
                 disabled={sending || content.length > 500 || content.length === 0 || !receiverUsername}
               >
-                {sending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
+                {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 {sending ? "Submitting..." : "Submit Confession"}
               </Button>
             </form>

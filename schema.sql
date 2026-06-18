@@ -15,8 +15,6 @@ create table if not exists public.profiles (
   gender text not null,
   bio text,
   relationship_intent text not null,
-  hookup_opt_in boolean default false,
-  hookup_opt_in_changed_at timestamp with time zone,
   date_of_birth date,
   is_visible boolean default true,
   deletion_queued_at timestamp with time zone,
@@ -26,6 +24,12 @@ create table if not exists public.profiles (
   ban_expires_at timestamp with time zone,
   is_suspended boolean default false,
   interest_tags text[],
+  food_preference text default 'No preference',
+  drinking_habit text default 'Prefer not to say',
+  smoking_habit text default 'Prefer not to say',
+  interested_interests text[] default '{}'::text[],
+  interested_departments text[] default '{}'::text[],
+  interested_years text[] default '{}'::text[],
   super_likes_today int default 0,
   super_likes_reset_at timestamp with time zone default now(),
   relationship_intents text[] default array['friendship'::text],
@@ -57,6 +61,7 @@ create table if not exists public.messages (
   match_id uuid references public.matches on delete cascade not null,
   sender_id uuid references public.profiles on delete cascade not null,
   content text not null,
+  is_read boolean default false not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
@@ -119,11 +124,31 @@ alter table public.profiles
   add column if not exists ban_expires_at timestamp with time zone,
   add column if not exists is_suspended boolean default false,
   add column if not exists interest_tags text[],
+  add column if not exists food_preference text default 'No preference',
+  add column if not exists drinking_habit text default 'Prefer not to say',
+  add column if not exists smoking_habit text default 'Prefer not to say',
+  add column if not exists interested_interests text[] default '{}'::text[],
+  add column if not exists interested_departments text[] default '{}'::text[],
+  add column if not exists interested_years text[] default '{}'::text[],
   add column if not exists super_likes_today int default 0,
   add column if not exists super_likes_reset_at timestamp with time zone default now(),
   add column if not exists relationship_intents text[] default array['friendship'::text],
   add column if not exists username text,
   add column if not exists has_password boolean default false not null;
+
+alter table public.profiles
+  drop column if exists hookup_opt_in,
+  drop column if exists hookup_opt_in_changed_at;
+
+update public.profiles
+set relationship_intent = 'friendship'
+where relationship_intent = 'casual';
+
+update public.profiles
+set relationship_intents = coalesce(
+  nullif(array_remove(relationship_intents, 'casual'), '{}'::text[]),
+  array['friendship'::text]
+);
 
 alter table public.confessions
   add column if not exists is_revealed boolean default false,
@@ -178,6 +203,16 @@ create policy "Users can view messages of their matches" on messages for select 
 drop policy if exists "Users can insert messages to their matches" on messages;
 create policy "Users can insert messages to their matches" on messages for insert with check (
   auth.uid() = sender_id and
+  exists (
+    select 1 from matches 
+    where id = messages.match_id 
+    and (user1_id = auth.uid() or user2_id = auth.uid())
+  )
+);
+
+drop policy if exists "Users can update messages of their matches" on messages;
+create policy "Users can update messages of their matches" on messages for update using (
+  auth.uid() != sender_id and
   exists (
     select 1 from matches 
     where id = messages.match_id 
@@ -253,8 +288,15 @@ create policy "Users can view their own support messages" on support_messages fo
 -- Function to handle new user signup
 create or replace function public.handle_new_user()
 returns trigger as $$
+declare
+  selected_intent text;
 begin
-  insert into public.profiles (id, email, username, has_password, real_name, department, year, gender, relationship_intent)
+  selected_intent := case
+    when coalesce(new.raw_user_meta_data->>'relationship_intent', 'friendship') = 'dating' then 'dating'
+    else 'friendship'
+  end;
+
+  insert into public.profiles (id, email, username, has_password, real_name, department, year, gender, relationship_intent, relationship_intents)
   values (
     new.id, 
     new.email,
@@ -267,7 +309,8 @@ begin
     coalesce(new.raw_user_meta_data->>'department', ''),
     coalesce(new.raw_user_meta_data->>'year', ''),
     coalesce(new.raw_user_meta_data->>'gender', ''),
-    coalesce(new.raw_user_meta_data->>'relationship_intent', 'friendship')
+    selected_intent,
+    array[selected_intent]
   );
   return new;
 end;

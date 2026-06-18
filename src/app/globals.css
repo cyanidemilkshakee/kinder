@@ -142,6 +142,10 @@
 }
 
 @layer utilities {
+  .font-bold {
+    text-transform: uppercase;
+  }
+
   /* Match modal animation */
   @keyframes matchPop {
     0% { opacity: 0; transform: scale(0.6) translateY(20px); }
@@ -168,11 +172,23 @@
   @keyframes swipeRight {
     to { opacity: 0; transform: translateX(120%) rotate(15deg); }
   }
+  @keyframes swipeUp {
+    to { opacity: 0; transform: translateY(-120%) scale(0.94); }
+  }
+  @keyframes swipeDown {
+    to { opacity: 0; transform: translateY(120%) scale(0.94); }
+  }
   .animate-swipe-left {
     animation: swipeLeft 0.35s ease forwards;
   }
   .animate-swipe-right {
     animation: swipeRight 0.35s ease forwards;
+  }
+  .animate-swipe-up {
+    animation: swipeUp 0.35s ease forwards;
+  }
+  .animate-swipe-down {
+    animation: swipeDown 0.35s ease forwards;
   }
 
   /* Confetti star burst */
