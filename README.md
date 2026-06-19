@@ -48,12 +48,11 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 
 ### 4. Database Setup
 
-You need to provision your Supabase database schema. Run the following SQL scripts in your Supabase SQL Editor in this exact order:
+You need to provision your Supabase database schema. Run the following SQL script in your Supabase SQL Editor:
 
 1. Copy and execute the contents of `schema.sql`.
-2. Copy and execute the contents of `schema_v3.sql`.
 
-*Note: These scripts will set up your tables (`profiles`, `matches`, `messages`, `confessions`, `reports`), trigger functions, storage buckets, and Row Level Security (RLS) policies.*
+*Note: This script will set up your tables (`profiles`, `matches`, `messages`, `confessions`, `reports`), trigger functions, storage buckets, and Row Level Security (RLS) policies. It is idempotent and can be safely re-run to apply updates.*
 
 ### 5. Run the Development Server
 
