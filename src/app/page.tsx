@@ -63,9 +63,7 @@ function AuthForm() {
   }, [searchParams])
 
   const isValidEmail = (emailToCheck: string) => {
-    const lowerEmail = emailToCheck.toLowerCase()
-    if (lowerEmail === "ghostfaked02@gmail.com" || lowerEmail === "ghostfaked03@gmail.com" || lowerEmail === "thetaghost1@gmail.com") return true
-    return lowerEmail.endsWith("@bmsce.ac.in")
+    return true
   }
 
   const resolveLoginEmail = async (identifier: string) => {
@@ -73,7 +71,7 @@ function AuthForm() {
 
     if (value.includes("@")) {
       if (!isValidEmail(value)) {
-        throw new Error("Please use your institutional email (@college.edu)")
+        throw new Error("Please enter a valid email address.")
       }
       return value
     }
@@ -103,9 +101,12 @@ function AuthForm() {
     const authEmail = email.trim()
     const signupUsername = normalizeUsername(username)
 
-    if ((view === "signup" || view === "forgot") && !isValidEmail(authEmail)) {
-      setError("Please use your institutional email (@college.edu)")
-      return
+    if ((view === "signup" || view === "forgot")) {
+      if (!isValidEmail(authEmail)) {
+        setError("Please enter a valid email address.")
+        setLoading(false)
+        return
+      }
     }
 
     if (view === "signup" && !isValidUsername(signupUsername)) {
@@ -263,7 +264,7 @@ function AuthForm() {
           <form onSubmit={handleAuth} className="space-y-4">
             <div className="space-y-1.5">
               <label htmlFor="email" className="block text-sm font-medium">
-                {view === "login" ? "Email or Username" : "Institutional Email"}
+                {view === "login" ? "Email or Username" : "Email"}
               </label>
               <input
                 id="email"

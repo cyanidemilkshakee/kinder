@@ -321,25 +321,9 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
--- Trigger to enforce email domain
-create or replace function public.validate_user_email()
-returns trigger as $$
-begin
-  if (
-    lower(new.email) not like '%@bmsce.ac.in' and 
-    lower(new.email) != 'ghostfaked02@gmail.com' and 
-    lower(new.email) != 'ghostfaked03@gmail.com'
-  ) then
-    raise exception 'Unauthorized email domain. Only @bmsce.ac.in is allowed.';
-  end if;
-  return new;
-end;
-$$ language plpgsql security definer;
-
+-- Trigger to enforce email domain has been removed to allow any email
 drop trigger if exists ensure_valid_email on auth.users;
-create trigger ensure_valid_email
-  before insert on auth.users
-  for each row execute procedure public.validate_user_email();
+drop function if exists public.validate_user_email();
 
 -- Moderation report threshold trigger
 create or replace function public.handle_report_thresholds()
