@@ -5,7 +5,8 @@ import { use, useEffect, useState, useRef } from "react"
 import { createClient } from "@/lib/client"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
-import { Send, Loader2 } from "lucide-react"
+import { Send, Loader2, X } from "lucide-react"
+import { ProfilePostCard, type PostProfile } from "@/components/ProfilePostCard"
 
 type Message = {
   id: string
@@ -24,6 +25,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [otherUserName, setOtherUserName] = useState("...")
   const [otherUserAvatar, setOtherUserAvatar] = useState<string | null>(null)
+  const [otherUserProfile, setOtherUserProfile] = useState<PostProfile | null>(null)
+  const [profileModalOpen, setProfileModalOpen] = useState(false)
+  const [activePhotoIndex, setActivePhotoIndex] = useState(0)
   const [loading, setLoading] = useState(true)
 
   const router = useRouter()
@@ -81,6 +85,23 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }
 
+  const handleNextPhoto = (event: React.MouseEvent) => {
+    event.stopPropagation()
+    if (!otherUserProfile) return
+    const allPhotos = otherUserProfile.photos?.filter(Boolean) || []
+    const photoCount = allPhotos.length > 0 ? allPhotos.length : 1
+    if (activePhotoIndex < photoCount - 1) {
+      setActivePhotoIndex((prev) => prev + 1)
+    }
+  }
+
+  const handlePrevPhoto = (event: React.MouseEvent) => {
+    event.stopPropagation()
+    if (activePhotoIndex > 0) {
+      setActivePhotoIndex((prev) => prev - 1)
+    }
+  }
+
   async function setupChat() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push("/"); return null }
@@ -90,8 +111,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     const { data: matchData, error: matchError } = await supabase
       .from("matches")
       .select(`
-        user1:profiles!user1_id(id, real_name, avatar_url),
-        user2:profiles!user2_id(id, real_name, avatar_url)
+        user1:profiles!user1_id(id, username, real_name, department, year, gender, bio, relationship_intent, relationship_intents, avatar_url, photos, interest_tags, food_preference, drinking_habit, smoking_habit),
+        user2:profiles!user2_id(id, username, real_name, department, year, gender, bio, relationship_intent, relationship_intents, avatar_url, photos, interest_tags, food_preference, drinking_habit, smoking_habit)
       `)
       .eq("id", chatId)
       .single()
@@ -106,6 +127,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     const otherUser = user1.id === user.id ? user2 : user1
     setOtherUserName(otherUser.real_name)
     setOtherUserAvatar(otherUser.avatar_url || `https://api.dicebear.com/9.x/micah/svg?seed=${otherUser.id}`)
+    setOtherUserProfile(otherUser)
 
     // Fetch previous messages
     const { data: messageData } = await supabase
@@ -188,7 +210,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   return (
     <div className="flex flex-col h-full overflow-hidden bg-transparent">
       {/* Header */}
-      <div className="bg-background/90 backdrop-blur-md border-b border-border px-6 py-4 flex items-center gap-4 sticky top-0 z-10">
+      <div 
+        onClick={() => setProfileModalOpen(true)}
+        className="bg-background/90 backdrop-blur-md border-b border-border px-6 py-4 flex items-center gap-4 sticky top-0 z-10 cursor-pointer hover:bg-muted/50 transition-colors"
+      >
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden border border-border flex-shrink-0">
             <img src={otherUserAvatar!} alt={otherUserName} className="w-full h-full object-cover" />
