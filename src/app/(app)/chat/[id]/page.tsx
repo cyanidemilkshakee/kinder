@@ -310,6 +310,26 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           </Button>
         </form>
       </div>
+    {profileModalOpen && otherUserProfile && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+        <div className="relative w-full max-w-lg">
+          <button
+            onClick={() => setProfileModalOpen(false)}
+            className="absolute -top-12 right-0 flex h-10 w-10 items-center justify-center rounded-full bg-background/20 text-white hover:bg-background/40"
+          >
+            <X className="h-6 w-6" />
+          </button>
+          <ProfilePostCard
+            profile={otherUserProfile}
+            avatarUrl={otherUserAvatar!}
+            photos={otherUserProfile.photos?.filter(Boolean) as string[] || []}
+            activePhotoIndex={activePhotoIndex}
+            onPrevPhoto={handlePrevPhoto}
+            onNextPhoto={handleNextPhoto}
+          />
+        </div>
+      </div>
+    )}
     </div>
   )
 }
