@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/client"
 import { usePathname, useRouter } from "next/navigation"
-import { Loader2, MessageCircle } from "lucide-react"
+import { Loader2 } from "lucide-react"
 
 type Match = {
   id: string
@@ -114,8 +114,7 @@ export function ChatSidebar() {
     <div className="w-72 border-r border-border bg-transparent flex flex-col h-full flex-shrink-0">
       <div className="p-4 border-b border-border">
         <div className="flex items-center gap-2">
-          <MessageCircle className="h-5 w-5 text-primary" />
-          <h2 className="font-bold text-lg">Messages</h2>
+          <h2 className="font-bold text-lg uppercase">Messages</h2>
         </div>
         <p className="text-xs text-muted-foreground mt-0.5">{matches.length} active match{matches.length !== 1 ? "es" : ""}</p>
       </div>
