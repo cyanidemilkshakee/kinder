@@ -1,6 +1,6 @@
 # Kinder
 
-Kinder is a campus-exclusive social discovery, friendship, and dating platform designed for undergraduate students. It provides a secure, verified environment for students to meet like-minded peers, send anonymous confessions, and match based on shared relationship intents.
+Kinder is a social discovery, friendship, and dating platform designed for undergraduate students. It provides a secure environment for students to meet like-minded peers, send anonymous confessions, and match based on shared relationship intents.
 
 ## 🌟 Key Features
 
