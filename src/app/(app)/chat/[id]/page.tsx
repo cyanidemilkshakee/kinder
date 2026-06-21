@@ -312,7 +312,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       </div>
     {profileModalOpen && otherUserProfile && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-        <div className="relative w-full max-w-lg">
+        <div className="relative w-full max-w-4xl xl:max-w-5xl">
           <button
             onClick={() => setProfileModalOpen(false)}
             className="absolute -top-12 right-0 flex h-10 w-10 items-center justify-center rounded-full bg-background/20 text-white hover:bg-background/40"
