@@ -146,6 +146,11 @@ export function ProfilePostCard({
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-sm font-bold leading-tight sm:text-base">{profile.real_name}</h2>
             <p className="truncate text-xs text-muted-foreground sm:text-sm">@{profile.username}</p>
+            {viewerProfile && (sharedInterests.length > 0 || mutualDetails.length > 0) && (
+              <p className="mt-1 line-clamp-2 text-[10px] font-semibold leading-snug text-primary sm:text-xs">
+                Shared: {[...sharedInterests.slice(0, 3), ...mutualDetails].join(" / ")}
+              </p>
+            )}
           </div>
           {profile.isSuperLike && (
             <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
@@ -177,18 +182,6 @@ export function ProfilePostCard({
               Food: {formatHabit(profile.food_preference)} / Drinking: {formatHabit(profile.drinking_habit)} / Smoking: {formatHabit(profile.smoking_habit)}
             </p>
           </div>
-
-          {viewerProfile && (sharedInterests.length > 0 || mutualDetails.length > 0) && (
-            <div>
-              <p className="text-[15px] font-bold uppercase tracking-wide text-primary">Shared with you</p>
-              <div className="mt-2 flex flex-col gap-1 text-[13px] font-normal leading-relaxed text-foreground">
-                {sharedInterests.length > 0 && (
-                  <p>Shared interests: {sharedInterests.slice(0, 5).join(", ")}</p>
-                )}
-                {mutualDetails.map((detail) => <p key={detail}>{detail}</p>)}
-              </div>
-            </div>
-          )}
 
           {profile.interest_tags && profile.interest_tags.length > 0 && (
             <div>

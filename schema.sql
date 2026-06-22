@@ -125,7 +125,7 @@ do $$
 declare
   realtime_table text;
 begin
-  foreach realtime_table in array array['message_reactions', 'profiles', 'matches']
+  foreach realtime_table in array array['message_reactions', 'muted_matches', 'profiles', 'matches']
   loop
     if exists (
       select 1 from pg_publication where pubname = 'supabase_realtime'
@@ -379,17 +379,19 @@ begin
       or new.message_type is distinct from old.message_type
       or new.media_path is distinct from old.media_path
       or new.media_metadata is distinct from old.media_metadata
-      or (old.is_read and not new.is_read)
-      or (old.delivered_at is not null and new.delivered_at is distinct from old.delivered_at)
-      or (old.read_at is not null and new.read_at is distinct from old.read_at) then
+      or (old.is_read and not new.is_read) then
       raise exception 'Recipients can only update delivery and read status';
     end if;
 
-    if old.delivered_at is null and new.delivered_at is not null then
+    if old.delivered_at is not null then
+      new.delivered_at := old.delivered_at;
+    elsif new.delivered_at is not null then
       new.delivered_at := timezone('utc'::text, now());
     end if;
 
-    if old.read_at is null and new.read_at is not null then
+    if old.read_at is not null then
+      new.read_at := old.read_at;
+    elsif new.read_at is not null then
       if not coalesce((
         select read_receipts_enabled
         from public.profiles
@@ -645,7 +647,10 @@ create policy "Users can insert their own super likes" on super_likes for insert
 
 -- Blocks Policies
 drop policy if exists "Users can view blocks they created" on blocks;
-create policy "Users can view blocks they created" on blocks for select using (auth.uid() = blocker_id);
+drop policy if exists "Users can view blocks involving them" on blocks;
+create policy "Users can view blocks involving them" on blocks for select
+to authenticated
+using ((select auth.uid()) = blocker_id or (select auth.uid()) = blocked_id);
 
 drop policy if exists "Users can insert their own blocks" on blocks;
 create policy "Users can insert their own blocks" on blocks for insert with check (auth.uid() = blocker_id);

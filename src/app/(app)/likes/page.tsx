@@ -92,7 +92,7 @@ export default function LikesPage() {
     }
     setCurrentUserId(user.id)
 
-    const [rightSwipesRes, mySwipesRes, superLikesRes, myProfileRes] = await Promise.all([
+    const [rightSwipesRes, mySwipesRes, superLikesRes, myProfileRes, blocksRes] = await Promise.all([
       supabase.from("swipes").select("swiper_id").eq("swiped_id", user.id).eq("is_right_swipe", true),
       supabase.from("swipes").select("swiped_id").eq("swiper_id", user.id),
       supabase.from("super_likes").select("sender_id").eq("receiver_id", user.id),
@@ -101,6 +101,10 @@ export default function LikesPage() {
         .select("id, username, real_name, department, year, gender, bio, relationship_intent, relationship_intents, avatar_url, photos, interest_tags, food_preference, drinking_habit, smoking_habit")
         .eq("id", user.id)
         .single(),
+      supabase
+        .from("blocks")
+        .select("blocker_id, blocked_id")
+        .or(`blocker_id.eq.${user.id},blocked_id.eq.${user.id}`),
     ])
 
     if (myProfileRes.data) {
@@ -110,7 +114,10 @@ export default function LikesPage() {
     const rightSwipes = rightSwipesRes.data || []
     const mySwipedIds = new Set((mySwipesRes.data || []).map((swipe) => swipe.swiped_id))
     const superLikerIds = new Set((superLikesRes.data || []).map((like) => like.sender_id))
-    const pendingLikerIds = rightSwipes.map((swipe) => swipe.swiper_id).filter((id) => !mySwipedIds.has(id))
+    const blockedIds = new Set((blocksRes.data || []).map((block) => block.blocker_id === user.id ? block.blocked_id : block.blocker_id))
+    const pendingLikerIds = rightSwipes
+      .map((swipe) => swipe.swiper_id)
+      .filter((id) => !mySwipedIds.has(id) && !blockedIds.has(id))
 
     if (pendingLikerIds.length === 0) {
       setLikers([])

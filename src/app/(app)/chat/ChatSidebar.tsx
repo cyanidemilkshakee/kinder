@@ -49,6 +49,9 @@ export function ChatSidebar() {
       .on("postgres_changes", { event: "*", schema: "public", table: "matches" }, () => {
         fetchMatches()
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "muted_matches" }, () => {
+        fetchMatches()
+      })
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }

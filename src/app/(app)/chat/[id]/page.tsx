@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 "use client"
 
 import { Fragment, use, useCallback, useEffect, useMemo, useRef, useState } from "react"
@@ -317,6 +318,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       if (typingVisibleTimerRef.current) clearTimeout(typingVisibleTimerRef.current)
       const channel = channelRef.current
       channelRef.current = null
+      mediaStreamRef.current?.getTracks().forEach((track) => track.stop())
       if (channel) {
         void channel.untrack()
         void supabase.removeChannel(channel)
@@ -473,7 +475,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   const uploadMedia = async (
     file: File,
-    type: Exclude<MessageType, "text">
+    type: Exclude<MessageType, "text">,
+    duration?: number
   ) => {
     if (!currentUserId) return
     const limit = type === "video" ? MAX_VIDEO_SIZE : type === "audio" ? MAX_AUDIO_SIZE : MAX_IMAGE_SIZE
@@ -500,7 +503,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       .from("chat-media")
       .createSignedUrl(path, 60 * 60)
     const metadata: MediaMetadata = { name: file.name, size: file.size }
-    if (type === "audio") metadata.duration = recordingSeconds
+    if (type === "audio" && duration !== undefined) metadata.duration = duration
 
     const sent = await insertMessage({
       content: newMessage.trim(),
@@ -527,16 +530,16 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const preferredType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-        ? "audio/webm;codecs=opus"
-        : "audio/webm"
-      const recorder = new MediaRecorder(stream, { mimeType: preferredType })
+      const preferredType = "audio/webm;codecs=opus"
+      const recorder = MediaRecorder.isTypeSupported(preferredType)
+        ? new MediaRecorder(stream, { mimeType: preferredType })
+        : new MediaRecorder(stream)
 
       mediaStreamRef.current = stream
       mediaRecorderRef.current = recorder
       recordingChunksRef.current = []
       recordingCancelledRef.current = false
-      recordingStartedAtRef.current = Date.now()
+      recordingStartedAtRef.current = new Date().getTime()
       setRecordingSeconds(0)
       setRecording(true)
       setError(null)
@@ -552,9 +555,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           return
         }
 
-        const blob = new Blob(recordingChunksRef.current, { type: preferredType })
-        const file = new File([blob], `voice-${Date.now()}.webm`, { type: "audio/webm" })
-        void uploadMedia(file, "audio")
+        const duration = Math.max(1, Math.round((new Date().getTime() - recordingStartedAtRef.current) / 1000))
+        const mimeType = recorder.mimeType || "audio/webm"
+        const blob = new Blob(recordingChunksRef.current, { type: mimeType })
+        const file = new File([blob], `voice-${crypto.randomUUID()}.webm`, { type: mimeType })
+        void uploadMedia(file, "audio", duration)
       }
       recorder.start()
     } catch {
@@ -890,6 +895,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         recording={recording}
         recordingSeconds={recordingSeconds}
         error={error}
+        starters={conversationStarters}
         onChange={updateComposer}
         onSend={sendTextMessage}
         onCancelReply={() => setReplyTo(null)}
@@ -902,7 +908,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       {profileModalOpen && otherUserProfile ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="chat-profile-title">
           <div className="relative w-full max-w-4xl xl:max-w-5xl">
-            <h2 id="chat-profile-title" className="sr-only">{otherUserName}'s profile</h2>
+            <h2 id="chat-profile-title" className="sr-only">{`${otherUserName}'s profile`}</h2>
             <button type="button" onClick={() => setProfileModalOpen(false)} className="absolute -top-10 right-0 font-bold text-white">
               Close
             </button>

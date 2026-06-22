@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef } from "react"
+import { useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import type { Message, MessageType } from "../chat-types"
 
@@ -12,6 +12,7 @@ type ChatComposerProps = {
   recording: boolean
   recordingSeconds: number
   error: string | null
+  starters: string[]
   onChange: (value: string) => void
   onSend: () => Promise<void>
   onCancelReply: () => void
@@ -29,6 +30,7 @@ export function ChatComposer({
   recording,
   recordingSeconds,
   error,
+  starters,
   onChange,
   onSend,
   onCancelReply,
@@ -40,6 +42,7 @@ export function ChatComposer({
   const photoInputRef = useRef<HTMLInputElement>(null)
   const videoInputRef = useRef<HTMLInputElement>(null)
   const gifInputRef = useRef<HTMLInputElement>(null)
+  const [startersOpen, setStartersOpen] = useState(false)
 
   const handleFile = async (
     event: React.ChangeEvent<HTMLInputElement>,
@@ -56,7 +59,7 @@ export function ChatComposer({
         {replyTo ? (
           <div className="flex items-center justify-between gap-3 rounded-md border-l-2 border-primary bg-muted/40 px-3 py-2 text-xs">
             <div className="min-w-0">
-              <span className="font-bold">Replying to {replyTo.sender_id ? "a message" : otherUserName}</span>
+              <span className="font-bold">Replying to a message</span>
               <span className="block truncate text-muted-foreground">
                 {replyTo.content || replyTo.message_type}
               </span>
@@ -69,7 +72,28 @@ export function ChatComposer({
 
         {error ? <p role="alert" className="text-xs font-semibold text-destructive">{error}</p> : null}
 
+        {startersOpen ? (
+          <div className="flex flex-col gap-1 rounded-md border bg-muted/30 p-2" aria-label="Conversation starters">
+            {starters.map((starter) => (
+              <button
+                key={starter}
+                type="button"
+                onClick={() => {
+                  onChange(starter)
+                  setStartersOpen(false)
+                }}
+                className="rounded px-2 py-1.5 text-left text-xs hover:bg-background"
+              >
+                {starter}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
         <div className="flex flex-wrap items-center gap-2 text-xs">
+          <Button type="button" size="xs" variant="ghost" onClick={() => setStartersOpen((open) => !open)} aria-expanded={startersOpen}>
+            Starters
+          </Button>
           <Button type="button" size="xs" variant="outline" onClick={() => photoInputRef.current?.click()} disabled={busy || recording}>
             Photo
           </Button>

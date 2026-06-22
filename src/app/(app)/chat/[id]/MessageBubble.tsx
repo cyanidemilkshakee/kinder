@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 "use client"
 
 import { useMemo, useRef, useState } from "react"
@@ -156,6 +157,7 @@ export function MessageBubble({
       id={`message-${message.id}`}
       role="listitem"
       tabIndex={0}
+      aria-keyshortcuts={isMe ? "R E Delete" : "R"}
       onKeyDown={handleKeyDown}
       onTouchStart={(event) => {
         const touch = event.changedTouches[0]
