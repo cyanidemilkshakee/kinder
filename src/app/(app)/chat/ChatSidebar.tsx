@@ -16,6 +16,7 @@ type Match = {
   last_message: string | null
   last_message_at: string | null
   unread_count: number
+  muted: boolean
 }
 
 function timeAgo(dateStr: string): string {
@@ -34,10 +35,10 @@ export function ChatSidebar() {
   const [loading, setLoading] = useState(true)
   const pathname = usePathname()
   const router = useRouter()
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
 
   useEffect(() => {
-    fetchMatches()
+    fetchMatches(true)
 
     // Subscribe to new messages and updates to update last message preview and read status
     const channel = supabase
@@ -45,26 +46,33 @@ export function ChatSidebar() {
       .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => {
         fetchMatches()
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "matches" }, () => {
+        fetchMatches()
+      })
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
   }, [])
 
-  async function fetchMatches() {
-    setLoading(true)
+  async function fetchMatches(showLoading = false) {
+    if (showLoading) setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    const { data: matchData, error } = await supabase
-      .from("matches")
-      .select(`
-        id,
-        created_at,
-        user1:profiles!user1_id(id, real_name, avatar_url),
-        user2:profiles!user2_id(id, real_name, avatar_url)
-      `)
-      .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
-      .order("created_at", { ascending: false })
+    const [{ data: matchData, error }, { data: mutedRows }] = await Promise.all([
+      supabase
+        .from("matches")
+        .select(`
+          id,
+          created_at,
+          user1:profiles!user1_id(id, real_name, avatar_url),
+          user2:profiles!user2_id(id, real_name, avatar_url)
+        `)
+        .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
+        .order("created_at", { ascending: false }),
+      supabase.from("muted_matches").select("match_id").eq("user_id", user.id),
+    ])
+    const mutedIds = new Set((mutedRows || []).map((row) => row.match_id))
 
     if (!error && matchData) {
       // Fetch last message for each match
@@ -74,7 +82,7 @@ export function ChatSidebar() {
 
           const { data: lastMsg } = await supabase
             .from("messages")
-            .select("content, created_at, deleted_at")
+            .select("content, created_at, deleted_at, message_type")
             .eq("match_id", m.id)
             .order("created_at", { ascending: false })
             .limit(1)
@@ -90,9 +98,12 @@ export function ChatSidebar() {
           return {
             id: m.id,
             other_user: otherUser,
-            last_message: lastMsg?.deleted_at ? "Message deleted" : lastMsg?.content || null,
+            last_message: lastMsg?.deleted_at
+              ? "Message deleted"
+              : lastMsg?.content || (lastMsg?.message_type && lastMsg.message_type !== "text" ? `Shared ${lastMsg.message_type}` : null),
             last_message_at: lastMsg?.created_at || null,
             unread_count: unreadCount || 0,
+            muted: mutedIds.has(m.id),
           }
         })
       )
@@ -111,7 +122,7 @@ export function ChatSidebar() {
   }
 
   return (
-    <div className="w-72 border-r border-border bg-transparent flex flex-col h-full flex-shrink-0">
+    <div className={`${pathname.startsWith("/chat/") ? "hidden md:flex" : "flex"} h-full w-full flex-shrink-0 flex-col border-r border-border bg-transparent md:w-72`}>
       <div className="p-4 border-b border-border">
         <div className="flex items-center gap-2">
           <h2 className="font-bold text-lg uppercase">Messages</h2>
@@ -153,6 +164,9 @@ export function ChatSidebar() {
                             {match.unread_count}
                           </span>
                         )}
+                        {match.muted && (
+                          <span className="text-[10px] text-muted-foreground">Muted</span>
+                        )}
                         {match.last_message_at && (
                           <span className={`text-xs ${match.unread_count > 0 ? "text-primary font-medium" : "text-muted-foreground"}`}>
                             {timeAgo(match.last_message_at)}
@@ -161,7 +175,7 @@ export function ChatSidebar() {
                       </div>
                     </div>
                     <p className={`text-xs truncate mt-0.5 ${match.unread_count > 0 ? "font-semibold text-foreground" : "text-muted-foreground"}`}>
-                      {match.last_message || "Tap to start chatting ✨"}
+                      {match.last_message || "Tap to start chatting"}
                     </p>
                   </div>
                 </button>

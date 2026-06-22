@@ -33,6 +33,8 @@ create table if not exists public.profiles (
   super_likes_today int default 0,
   super_likes_reset_at timestamp with time zone default now(),
   relationship_intents text[] default array['friendship'::text],
+  read_receipts_enabled boolean default true not null,
+  last_seen_at timestamp with time zone default timezone('utc'::text, now()) not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
@@ -64,11 +66,43 @@ create table if not exists public.messages (
   is_read boolean default false not null,
   edited_at timestamp with time zone,
   deleted_at timestamp with time zone,
+  reply_to_id uuid references public.messages on delete set null,
+  message_type text default 'text' not null check (message_type in ('text', 'image', 'video', 'gif', 'audio')),
+  media_path text,
+  media_metadata jsonb default '{}'::jsonb not null,
+  delivered_at timestamp with time zone,
+  read_at timestamp with time zone,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
 create index if not exists messages_match_created_at_idx
   on public.messages (match_id, created_at);
+
+create index if not exists messages_match_unread_idx
+  on public.messages (match_id, is_read, created_at desc);
+
+-- MESSAGE REACTIONS
+create table if not exists public.message_reactions (
+  id uuid default uuid_generate_v4() primary key,
+  message_id uuid references public.messages on delete cascade not null,
+  match_id uuid references public.matches on delete cascade not null,
+  user_id uuid references public.profiles on delete cascade not null,
+  emoji text not null check (char_length(emoji) between 1 and 16),
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  unique(message_id, user_id)
+);
+
+create index if not exists message_reactions_match_idx
+  on public.message_reactions (match_id, message_id);
+
+-- MUTED CONVERSATIONS
+create table if not exists public.muted_matches (
+  id uuid default uuid_generate_v4() primary key,
+  match_id uuid references public.matches on delete cascade not null,
+  user_id uuid references public.profiles on delete cascade not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  unique(match_id, user_id)
+);
 
 -- Realtime Postgres Changes only emits rows from tables in this publication.
 do $$
@@ -84,6 +118,27 @@ begin
   ) then
     execute 'alter publication supabase_realtime add table public.messages';
   end if;
+end
+$$;
+
+do $$
+declare
+  realtime_table text;
+begin
+  foreach realtime_table in array array['message_reactions', 'profiles', 'matches']
+  loop
+    if exists (
+      select 1 from pg_publication where pubname = 'supabase_realtime'
+    ) and not exists (
+      select 1
+      from pg_publication_tables
+      where pubname = 'supabase_realtime'
+        and schemaname = 'public'
+        and tablename = realtime_table
+    ) then
+      execute format('alter publication supabase_realtime add table public.%I', realtime_table);
+    end if;
+  end loop;
 end
 $$;
 
@@ -138,6 +193,23 @@ create table if not exists public.support_messages (
   created_at timestamp with time zone default now() not null
 );
 
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'chat-media',
+  'chat-media',
+  false,
+  26214400,
+  array[
+    'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+    'video/mp4', 'video/webm', 'video/quicktime',
+    'audio/webm', 'audio/ogg', 'audio/mp4', 'audio/mpeg', 'audio/wav'
+  ]
+)
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
 
 -- ADD MISSING COLUMNS (Additive Migration for existing tables)
 alter table public.profiles
@@ -156,7 +228,9 @@ alter table public.profiles
   add column if not exists super_likes_reset_at timestamp with time zone default now(),
   add column if not exists relationship_intents text[] default array['friendship'::text],
   add column if not exists username text,
-  add column if not exists has_password boolean default false not null;
+  add column if not exists has_password boolean default false not null,
+  add column if not exists read_receipts_enabled boolean default true not null,
+  add column if not exists last_seen_at timestamp with time zone default timezone('utc'::text, now()) not null;
 
 alter table public.profiles
   drop column if exists hookup_opt_in,
@@ -179,7 +253,75 @@ alter table public.confessions
 
 alter table public.messages
   add column if not exists edited_at timestamp with time zone,
-  add column if not exists deleted_at timestamp with time zone;
+  add column if not exists deleted_at timestamp with time zone,
+  add column if not exists reply_to_id uuid references public.messages on delete set null,
+  add column if not exists message_type text default 'text' not null,
+  add column if not exists media_path text,
+  add column if not exists media_metadata jsonb default '{}'::jsonb not null,
+  add column if not exists delivered_at timestamp with time zone,
+  add column if not exists read_at timestamp with time zone;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'messages_message_type_check'
+  ) then
+    alter table public.messages
+      add constraint messages_message_type_check
+      check (message_type in ('text', 'image', 'video', 'gif', 'audio'));
+  end if;
+end
+$$;
+
+create or replace function public.enforce_message_insert_rules()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  acting_user uuid := (select auth.uid());
+begin
+  if acting_user is null or new.sender_id is distinct from acting_user then
+    raise exception 'Messages must be sent by the authenticated user';
+  end if;
+
+  new.content := btrim(coalesce(new.content, ''));
+  new.is_read := false;
+  new.edited_at := null;
+  new.deleted_at := null;
+  new.delivered_at := null;
+  new.read_at := null;
+
+  if new.message_type = 'text' and new.content = '' then
+    raise exception 'Text messages cannot be empty';
+  end if;
+
+  if new.message_type != 'text' then
+    if new.media_path is null
+      or position(new.match_id::text || '/' || acting_user::text || '/' in new.media_path) != 1 then
+      raise exception 'Media must belong to this conversation and sender';
+    end if;
+  end if;
+
+  if new.reply_to_id is not null and not exists (
+    select 1 from public.messages
+    where id = new.reply_to_id
+      and match_id = new.match_id
+  ) then
+    raise exception 'Reply target must belong to this conversation';
+  end if;
+
+  return new;
+end;
+$$;
+
+revoke all on function public.enforce_message_insert_rules() from public;
+
+drop trigger if exists enforce_message_insert_rules on public.messages;
+create trigger enforce_message_insert_rules
+before insert on public.messages
+for each row execute function public.enforce_message_insert_rules();
 
 create or replace function public.enforce_message_update_rules()
 returns trigger
@@ -202,12 +344,20 @@ begin
     if new.match_id is distinct from old.match_id
       or new.sender_id is distinct from old.sender_id
       or new.created_at is distinct from old.created_at
-      or new.is_read is distinct from old.is_read then
+      or new.is_read is distinct from old.is_read
+      or new.delivered_at is distinct from old.delivered_at
+      or new.read_at is distinct from old.read_at
+      or new.reply_to_id is distinct from old.reply_to_id
+      or new.message_type is distinct from old.message_type
+      or new.media_path is distinct from old.media_path
+      or new.media_metadata is distinct from old.media_metadata then
       raise exception 'Senders can only edit or delete their message content';
     end if;
 
     if new.deleted_at is not null then
       new.content := '';
+      new.media_path := null;
+      new.media_metadata := '{}'::jsonb;
       new.deleted_at := timezone('utc'::text, now());
     elsif new.content is distinct from old.content then
       new.content := btrim(new.content);
@@ -225,8 +375,32 @@ begin
       or new.created_at is distinct from old.created_at
       or new.edited_at is distinct from old.edited_at
       or new.deleted_at is distinct from old.deleted_at
-      or new.is_read is not true then
-      raise exception 'Recipients can only mark messages as read';
+      or new.reply_to_id is distinct from old.reply_to_id
+      or new.message_type is distinct from old.message_type
+      or new.media_path is distinct from old.media_path
+      or new.media_metadata is distinct from old.media_metadata
+      or (old.is_read and not new.is_read)
+      or (old.delivered_at is not null and new.delivered_at is distinct from old.delivered_at)
+      or (old.read_at is not null and new.read_at is distinct from old.read_at) then
+      raise exception 'Recipients can only update delivery and read status';
+    end if;
+
+    if old.delivered_at is null and new.delivered_at is not null then
+      new.delivered_at := timezone('utc'::text, now());
+    end if;
+
+    if old.read_at is null and new.read_at is not null then
+      if not coalesce((
+        select read_receipts_enabled
+        from public.profiles
+        where id = acting_user
+      ), true) then
+        raise exception 'Read receipts are disabled';
+      end if;
+
+      new.read_at := timezone('utc'::text, now());
+      new.delivered_at := coalesce(new.delivered_at, timezone('utc'::text, now()));
+      new.is_read := true;
     end if;
   end if;
 
@@ -246,6 +420,8 @@ alter table public.profiles enable row level security;
 alter table public.swipes enable row level security;
 alter table public.matches enable row level security;
 alter table public.messages enable row level security;
+alter table public.message_reactions enable row level security;
+alter table public.muted_matches enable row level security;
 alter table public.confessions enable row level security;
 alter table public.reports enable row level security;
 alter table public.super_likes enable row level security;
@@ -275,6 +451,11 @@ create policy "Users can view their own matches" on matches for select using (au
 
 drop policy if exists "Users can insert matches" on matches;
 create policy "Users can insert matches" on matches for insert with check (auth.uid() = user1_id or auth.uid() = user2_id);
+
+drop policy if exists "Users can unmatch their own matches" on matches;
+create policy "Users can unmatch their own matches" on matches for delete
+to authenticated
+using ((select auth.uid()) = user1_id or (select auth.uid()) = user2_id);
 
 -- Messages Policies
 drop policy if exists "Users can view messages of their matches" on messages;
@@ -345,7 +526,77 @@ with check (
 -- The trigger separates sender edits from recipient read-status updates.
 grant select, insert on table public.messages to authenticated;
 revoke update on table public.messages from authenticated;
-grant update (content, edited_at, deleted_at, is_read) on table public.messages to authenticated;
+grant update (content, edited_at, deleted_at, is_read, delivered_at, read_at) on table public.messages to authenticated;
+
+-- Message Reactions Policies
+drop policy if exists "Matched users can view reactions" on message_reactions;
+create policy "Matched users can view reactions" on message_reactions for select
+to authenticated
+using (
+  exists (
+    select 1 from public.matches
+    where id = message_reactions.match_id
+      and (user1_id = (select auth.uid()) or user2_id = (select auth.uid()))
+  )
+);
+
+drop policy if exists "Matched users can add reactions" on message_reactions;
+create policy "Matched users can add reactions" on message_reactions for insert
+to authenticated
+with check (
+  user_id = (select auth.uid())
+  and exists (
+    select 1 from public.messages
+    where id = message_reactions.message_id
+      and match_id = message_reactions.match_id
+      and deleted_at is null
+  )
+  and exists (
+    select 1 from public.matches
+    where id = message_reactions.match_id
+      and (user1_id = (select auth.uid()) or user2_id = (select auth.uid()))
+  )
+);
+
+drop policy if exists "Users can update their reactions" on message_reactions;
+create policy "Users can update their reactions" on message_reactions for update
+to authenticated
+using (user_id = (select auth.uid()))
+with check (user_id = (select auth.uid()));
+
+drop policy if exists "Users can remove their reactions" on message_reactions;
+create policy "Users can remove their reactions" on message_reactions for delete
+to authenticated
+using (user_id = (select auth.uid()));
+
+grant select, insert, delete on table public.message_reactions to authenticated;
+revoke update on table public.message_reactions from authenticated;
+grant update (emoji) on table public.message_reactions to authenticated;
+
+-- Muted Conversations Policies
+drop policy if exists "Users can view their muted conversations" on muted_matches;
+create policy "Users can view their muted conversations" on muted_matches for select
+to authenticated
+using (user_id = (select auth.uid()));
+
+drop policy if exists "Users can mute their conversations" on muted_matches;
+create policy "Users can mute their conversations" on muted_matches for insert
+to authenticated
+with check (
+  user_id = (select auth.uid())
+  and exists (
+    select 1 from public.matches
+    where id = muted_matches.match_id
+      and (user1_id = (select auth.uid()) or user2_id = (select auth.uid()))
+  )
+);
+
+drop policy if exists "Users can unmute their conversations" on muted_matches;
+create policy "Users can unmute their conversations" on muted_matches for delete
+to authenticated
+using (user_id = (select auth.uid()));
+
+grant select, insert, delete on table public.muted_matches to authenticated;
 
 -- Confessions Policies
 drop policy if exists "Users can view own or approved confessions" on confessions;
@@ -408,6 +659,71 @@ create policy "Users can insert their own support messages" on support_messages 
 
 drop policy if exists "Users can view their own support messages" on support_messages;
 create policy "Users can view their own support messages" on support_messages for select using (auth.uid() = user_id);
+
+-- Explicit Data API grants for chat and safety actions.
+grant select, update on table public.profiles to authenticated;
+grant select, insert, delete on table public.matches to authenticated;
+grant insert on table public.reports to authenticated;
+grant select, insert, delete on table public.blocks to authenticated;
+
+-- Private chat media is readable only by participants in the matching conversation.
+drop policy if exists "Matched users can read chat media" on storage.objects;
+create policy "Matched users can read chat media" on storage.objects for select
+to authenticated
+using (
+  bucket_id = 'chat-media'
+  and exists (
+    select 1 from public.matches
+    where (storage.foldername(name))[1] = matches.id::text
+      and (user1_id = (select auth.uid()) or user2_id = (select auth.uid()))
+  )
+);
+
+drop policy if exists "Matched users can upload chat media" on storage.objects;
+create policy "Matched users can upload chat media" on storage.objects for insert
+to authenticated
+with check (
+  bucket_id = 'chat-media'
+  and owner_id = (select auth.uid())::text
+  and exists (
+    select 1 from public.matches
+    where (storage.foldername(name))[1] = matches.id::text
+      and (user1_id = (select auth.uid()) or user2_id = (select auth.uid()))
+  )
+);
+
+drop policy if exists "Users can delete their chat media" on storage.objects;
+create policy "Users can delete their chat media" on storage.objects for delete
+to authenticated
+using (
+  bucket_id = 'chat-media'
+  and owner_id = (select auth.uid())::text
+);
+
+-- Private Broadcast and Presence topics are named match:<match uuid>.
+drop policy if exists "Matched users can receive private chat realtime" on realtime.messages;
+create policy "Matched users can receive private chat realtime" on realtime.messages for select
+to authenticated
+using (
+  realtime.messages.extension in ('broadcast', 'presence')
+  and exists (
+    select 1 from public.matches
+    where 'match:' || matches.id::text = (select realtime.topic())
+      and (user1_id = (select auth.uid()) or user2_id = (select auth.uid()))
+  )
+);
+
+drop policy if exists "Matched users can send private chat realtime" on realtime.messages;
+create policy "Matched users can send private chat realtime" on realtime.messages for insert
+to authenticated
+with check (
+  realtime.messages.extension in ('broadcast', 'presence')
+  and exists (
+    select 1 from public.matches
+    where 'match:' || matches.id::text = (select realtime.topic())
+      and (user1_id = (select auth.uid()) or user2_id = (select auth.uid()))
+  )
+);
 
 
 -- TRIGGERS & FUNCTIONS

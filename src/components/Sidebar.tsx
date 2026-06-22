@@ -7,6 +7,7 @@ import { Home, Heart, MessageCircle, User, HeartHandshake, Settings, Info, LogOu
 import { createClient } from "@/lib/client"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
+import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat"
 
 type UserProfile = {
   real_name: string
@@ -18,11 +19,13 @@ type UserProfile = {
 export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [unreadChatCount, setUnreadChatCount] = useState(0)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+
+  usePresenceHeartbeat()
 
   useEffect(() => {
     let isMounted = true
@@ -50,6 +53,12 @@ export function Sidebar() {
       }
 
       // Fetch initial unread count
+      await supabase
+        .from('messages')
+        .update({ delivered_at: new Date().toISOString() })
+        .neq('sender_id', user.id)
+        .is('delivered_at', null)
+
       await fetchUnreadCount()
 
       if (!isMounted) return
@@ -61,6 +70,19 @@ export function Sidebar() {
           fetchUnreadCount() // Always re-calculate on any insert/update
           
           if (payload.eventType === 'INSERT' && payload.new.sender_id !== user.id && !payload.new.is_read) {
+            await supabase
+              .from('messages')
+              .update({ delivered_at: new Date().toISOString() })
+              .eq('id', payload.new.id)
+
+            const { data: mutedMatch } = await supabase
+              .from('muted_matches')
+              .select('id')
+              .eq('match_id', payload.new.match_id)
+              .eq('user_id', user.id)
+              .maybeSingle()
+            if (mutedMatch) return
+
             const { data: sender } = await supabase.from('profiles').select('real_name').eq('id', payload.new.sender_id).single()
             setToastMessage(`New message from ${sender?.real_name || 'Someone'}`)
             setTimeout(() => setToastMessage(null), 3500)

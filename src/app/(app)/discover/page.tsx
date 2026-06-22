@@ -96,6 +96,7 @@ export default function DiscoverPage() {
   const [activeIntent, setActiveIntent] = useState<RelationshipIntent>("friendship")
   const [loading, setLoading] = useState(true)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [viewerProfile, setViewerProfile] = useState<Profile | null>(null)
   const [superLikesLeft, setSuperLikesLeft] = useState(3)
   const [swipingId, setSwipingId] = useState<string | null>(null)
   const [swipeDirection, setSwipeDirection] = useState<ProfileSwipeDirection | null>(null)
@@ -127,7 +128,7 @@ export default function DiscoverPage() {
     const [myProfileRes, swipesRes, blocksRes, superLikesSentRes] = await Promise.all([
       supabase
         .from("profiles")
-        .select("super_likes_today, super_likes_reset_at, interested_interests, interested_departments, interested_years")
+        .select("id, username, real_name, department, year, gender, bio, relationship_intent, relationship_intents, avatar_url, photos, interest_tags, food_preference, drinking_habit, smoking_habit, super_likes_today, super_likes_reset_at, interested_interests, interested_departments, interested_years")
         .eq("id", user.id)
         .single(),
       supabase
@@ -150,6 +151,7 @@ export default function DiscoverPage() {
     const superLikesSent = superLikesSentRes.data
 
     if (myProfile) {
+      setViewerProfile(myProfile as Profile)
       const resetAt = new Date(myProfile.super_likes_reset_at)
       const now = new Date()
       const hoursSinceReset = (now.getTime() - resetAt.getTime()) / (1000 * 60 * 60)
@@ -424,6 +426,7 @@ export default function DiscoverPage() {
             <div className="w-full max-w-4xl xl:max-w-5xl">
               <ProfilePostCard
                 profile={current}
+                viewerProfile={viewerProfile}
                 avatarUrl={avatar}
                 photos={allPhotos}
                 activePhotoIndex={activePhotoIndex}

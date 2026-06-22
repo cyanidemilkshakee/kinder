@@ -1,122 +1,203 @@
-/* eslint-disable */
 "use client"
 
-import { use, useEffect, useState, useRef } from "react"
-import { createClient } from "@/lib/client"
-import { Button } from "@/components/ui/button"
+import { Fragment, use, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Send, Loader2, X } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { ProfilePostCard, type PostProfile } from "@/components/ProfilePostCard"
+import { createClient } from "@/lib/client"
+import { ChatComposer } from "./ChatComposer"
+import { MessageBubble } from "./MessageBubble"
+import {
+  MESSAGE_SELECT,
+  buildConversationStarters,
+  formatLastSeen,
+  formatMessageDate,
+  mergeMessages,
+  sameCalendarDay,
+  type MediaMetadata,
+  type Message,
+  type MessageReaction,
+  type MessageType,
+} from "../chat-types"
 
-type Message = {
-  id: string
-  content: string
-  sender_id: string
-  created_at: string
-  is_read?: boolean
-  edited_at?: string | null
-  deleted_at?: string | null
-}
+const PAGE_SIZE = 30
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024
+const MAX_VIDEO_SIZE = 25 * 1024 * 1024
+const MAX_AUDIO_SIZE = 15 * 1024 * 1024
+
+const REPORT_REASONS = [
+  "Harassment or threats",
+  "Inappropriate content",
+  "Spam or scam",
+  "Impersonation",
+  "Other",
+]
 
 type RealtimeStatus = "connecting" | "live" | "offline"
+type SafetyAction = "report" | "block" | "unmatch" | null
+type ChatProfile = PostProfile & {
+  last_seen_at?: string | null
+  read_receipts_enabled?: boolean
+}
 
-function mergeMessages(current: Message[], incoming: Message[]) {
-  const messagesById = new Map(current.map((message) => [message.id, message]))
-
-  for (const message of incoming) {
-    messagesById.set(message.id, message)
-  }
-
-  return Array.from(messagesById.values()).sort(
-    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-  )
+function mergeReactions(current: MessageReaction[], incoming: MessageReaction[]) {
+  const byId = new Map(current.map((reaction) => [reaction.id, reaction]))
+  for (const reaction of incoming) byId.set(reaction.id, reaction)
+  return Array.from(byId.values())
 }
 
 export default function ChatPage({ params }: { params: Promise<{ id: string }> }) {
-  const resolvedParams = use(params)
-  const chatId = resolvedParams.id
-
-  const [messages, setMessages] = useState<Message[]>([])
-  const [newMessage, setNewMessage] = useState("")
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-  const [otherUserName, setOtherUserName] = useState("...")
-  const [otherUserAvatar, setOtherUserAvatar] = useState<string | null>(null)
-  const [otherUserProfile, setOtherUserProfile] = useState<PostProfile | null>(null)
-  const [profileModalOpen, setProfileModalOpen] = useState(false)
-  const [activePhotoIndex, setActivePhotoIndex] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>("connecting")
-  const [sendError, setSendError] = useState<string | null>(null)
-  const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
-  const [editDraft, setEditDraft] = useState("")
-  const [deleteConfirmMessageId, setDeleteConfirmMessageId] = useState<string | null>(null)
-  const [pendingMessageId, setPendingMessageId] = useState<string | null>(null)
-  const [messageActionError, setMessageActionError] = useState<string | null>(null)
-
+  const { id: chatId } = use(params)
   const router = useRouter()
   const [supabase] = useState(() => createClient())
+
+  const [messages, setMessages] = useState<Message[]>([])
+  const [reactions, setReactions] = useState<MessageReaction[]>([])
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [currentUserProfile, setCurrentUserProfile] = useState<ChatProfile | null>(null)
+  const [otherUserProfile, setOtherUserProfile] = useState<ChatProfile | null>(null)
+  const [otherUserAvatar, setOtherUserAvatar] = useState("")
+  const [newMessage, setNewMessage] = useState("")
+  const [replyTo, setReplyTo] = useState<Message | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(true)
+  const [composerBusy, setComposerBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>("connecting")
+  const [otherUserOnline, setOtherUserOnline] = useState(false)
+  const [otherUserTyping, setOtherUserTyping] = useState(false)
+  const [lastSeenAt, setLastSeenAt] = useState<string | null>(null)
+  const [muted, setMuted] = useState(false)
+  const [optionsOpen, setOptionsOpen] = useState(false)
+  const [safetyAction, setSafetyAction] = useState<SafetyAction>(null)
+  const [reportReason, setReportReason] = useState("")
+  const [safetyBusy, setSafetyBusy] = useState(false)
+  const [profileModalOpen, setProfileModalOpen] = useState(false)
+  const [activePhotoIndex, setActivePhotoIndex] = useState(0)
+  const [recording, setRecording] = useState(false)
+  const [recordingSeconds, setRecordingSeconds] = useState(0)
+
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const typingVisibleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const shouldScrollToBottomRef = useRef(true)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const mediaStreamRef = useRef<MediaStream | null>(null)
+  const recordingChunksRef = useRef<Blob[]>([])
+  const recordingStartedAtRef = useRef(0)
+  const recordingCancelledRef = useRef(false)
+
+  const otherUserName = otherUserProfile?.real_name || "..."
+  const conversationStarters = useMemo(
+    () => buildConversationStarters(currentUserProfile, otherUserProfile),
+    [currentUserProfile, otherUserProfile]
+  )
+  const messagesById = useMemo(
+    () => new Map(messages.map((message) => [message.id, message])),
+    [messages]
+  )
+
+  const hydrateMedia = useCallback(async (rows: Message[]) => {
+    const paths = Array.from(new Set(rows.flatMap((message) => message.media_path ? [message.media_path] : [])))
+    if (paths.length === 0) return rows
+
+    const { data } = await supabase.storage.from("chat-media").createSignedUrls(paths, 60 * 60)
+    const urls = new Map((data || []).map((item) => [item.path, item.signedUrl]))
+
+    return rows.map((message) => ({
+      ...message,
+      media_url: message.media_path ? urls.get(message.media_path) || null : null,
+    }))
+  }, [supabase])
+
+  const loadReactions = useCallback(async (messageIds: string[]) => {
+    if (messageIds.length === 0) return
+    const { data } = await supabase
+      .from("message_reactions")
+      .select("id, message_id, match_id, user_id, emoji, created_at")
+      .in("message_id", messageIds)
+
+    if (data) setReactions((current) => mergeReactions(current, data as MessageReaction[]))
+  }, [supabase])
+
+  const loadLatestMessages = useCallback(async () => {
+    const { data, error: loadError } = await supabase
+      .from("messages")
+      .select(MESSAGE_SELECT)
+      .eq("match_id", chatId)
+      .order("created_at", { ascending: false })
+      .limit(PAGE_SIZE)
+
+    if (loadError || !data) return
+    const rows = await hydrateMedia((data as unknown as Message[]).reverse())
+    setMessages((current) => mergeMessages(current, rows))
+    setHasMore(data.length === PAGE_SIZE)
+    await loadReactions(rows.map((message) => message.id))
+  }, [chatId, hydrateMedia, loadReactions, supabase])
+
+  const markReceivedMessages = useCallback(async (userId: string, readReceiptsEnabled: boolean) => {
+    const now = new Date().toISOString()
+    const updates: Record<string, boolean | string> = {
+      is_read: true,
+      delivered_at: now,
+    }
+    if (readReceiptsEnabled) updates.read_at = now
+
+    await supabase
+      .from("messages")
+      .update(updates)
+      .eq("match_id", chatId)
+      .neq("sender_id", userId)
+      .eq("is_read", false)
+  }, [chatId, supabase])
 
   useEffect(() => {
-    let channel: ReturnType<typeof supabase.channel> | null = null
-    let isMounted = true
+    let mounted = true
 
-    const markMessageRead = async (messageId: string) => {
-      await supabase
-        .from("messages")
-        .update({ is_read: true })
-        .eq("id", messageId)
-    }
-
-    const loadMessages = async (userId: string) => {
-      const { data, error } = await supabase
-        .from("messages")
-        .select("id, content, sender_id, created_at, is_read, edited_at, deleted_at")
-        .eq("match_id", chatId)
-        .order("created_at", { ascending: true })
-
-      if (!isMounted || error || !data) return
-
-      setMessages((current) => mergeMessages(current, data as Message[]))
-
-      const hasUnread = data.some(
-        (message) => message.sender_id !== userId && !message.is_read
-      )
-
-      if (hasUnread) {
-        await supabase
-          .from("messages")
-          .update({ is_read: true })
-          .eq("match_id", chatId)
-          .neq("sender_id", userId)
-          .eq("is_read", false)
-      }
-    }
-
-    const init = async () => {
+    const initialize = async () => {
       setLoading(true)
       setRealtimeStatus("connecting")
 
-      const { data: { user } } = await supabase.auth.getUser()
+      const [{ data: authData }, { data: sessionData }] = await Promise.all([
+        supabase.auth.getUser(),
+        supabase.auth.getSession(),
+      ])
+      const user = authData.user
       if (!user) {
         router.push("/")
         return
       }
+      if (!mounted) return
 
-      if (!isMounted) return
       setCurrentUserId(user.id)
+      if (sessionData.session?.access_token) {
+        supabase.realtime.setAuth(sessionData.session.access_token)
+      }
 
-      const { data: matchData, error: matchError } = await supabase
-        .from("matches")
-        .select(`
-          user1:profiles!user1_id(id, username, real_name, department, year, gender, bio, relationship_intent, relationship_intents, avatar_url, photos, interest_tags, food_preference, drinking_habit, smoking_habit),
-          user2:profiles!user2_id(id, username, real_name, department, year, gender, bio, relationship_intent, relationship_intents, avatar_url, photos, interest_tags, food_preference, drinking_habit, smoking_habit)
-        `)
-        .eq("id", chatId)
-        .single()
+      const [{ data: matchData, error: matchError }, { data: muteData }] = await Promise.all([
+        supabase
+          .from("matches")
+          .select(`
+            id,
+            user1_id,
+            user2_id,
+            user1:profiles!user1_id(id, username, real_name, department, year, gender, bio, relationship_intent, relationship_intents, avatar_url, photos, interest_tags, food_preference, drinking_habit, smoking_habit, last_seen_at, read_receipts_enabled),
+            user2:profiles!user2_id(id, username, real_name, department, year, gender, bio, relationship_intent, relationship_intents, avatar_url, photos, interest_tags, food_preference, drinking_habit, smoking_habit, last_seen_at, read_receipts_enabled)
+          `)
+          .eq("id", chatId)
+          .single(),
+        supabase
+          .from("muted_matches")
+          .select("id")
+          .eq("match_id", chatId)
+          .eq("user_id", user.id)
+          .maybeSingle(),
+      ])
 
-      if (!isMounted) return
-
+      if (!mounted) return
       if (matchError || !matchData) {
         router.push("/chat")
         return
@@ -124,464 +205,766 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
       const user1 = Array.isArray(matchData.user1) ? matchData.user1[0] : matchData.user1
       const user2 = Array.isArray(matchData.user2) ? matchData.user2[0] : matchData.user2
-      const otherUser = user1?.id === user.id ? user2 : user1
-
-      if (!otherUser) {
+      const me = (user1?.id === user.id ? user1 : user2) as ChatProfile | undefined
+      const other = (user1?.id === user.id ? user2 : user1) as ChatProfile | undefined
+      if (!me || !other) {
         router.push("/chat")
         return
       }
 
-      setOtherUserName(otherUser.real_name)
+      setCurrentUserProfile(me)
+      setOtherUserProfile(other)
+      setLastSeenAt(other.last_seen_at || null)
       setOtherUserAvatar(
-        otherUser.avatar_url || `https://api.dicebear.com/9.x/micah/svg?seed=${otherUser.id}`
+        other.avatar_url || `https://api.dicebear.com/9.x/micah/svg?seed=${other.id}`
       )
-      setOtherUserProfile(otherUser as PostProfile)
+      setMuted(Boolean(muteData))
 
-      channel = supabase
-        .channel(`chat-${chatId}`)
+      await Promise.all([
+        loadLatestMessages(),
+        markReceivedMessages(user.id, me.read_receipts_enabled !== false),
+      ])
+
+      const channel = supabase
+        .channel(`match:${chatId}`, {
+          config: {
+            private: true,
+            presence: { key: user.id },
+          },
+        })
+        .on("presence", { event: "sync" }, () => {
+          const presences = Object.values(channel.presenceState()).flat() as Array<{ user_id?: string }>
+          setOtherUserOnline(presences.some((presence) => presence.user_id === other.id))
+        })
+        .on("broadcast", { event: "typing" }, ({ payload }) => {
+          if (payload.user_id !== other.id) return
+          setOtherUserTyping(Boolean(payload.is_typing))
+          if (typingVisibleTimerRef.current) clearTimeout(typingVisibleTimerRef.current)
+          if (payload.is_typing) {
+            typingVisibleTimerRef.current = setTimeout(() => setOtherUserTyping(false), 1800)
+          }
+        })
         .on(
           "postgres_changes",
-          {
-            event: "INSERT",
-            schema: "public",
-            table: "messages",
-            filter: `match_id=eq.${chatId}`,
-          },
+          { event: "INSERT", schema: "public", table: "messages", filter: `match_id=eq.${chatId}` },
           (payload) => {
-            const incomingMessage = payload.new as Message
-            setMessages((current) => mergeMessages(current, [incomingMessage]))
+            const incoming = payload.new as Message
+            void hydrateMedia([incoming]).then((hydrated) => {
+              setMessages((current) => mergeMessages(current, hydrated))
+            })
+            shouldScrollToBottomRef.current = true
 
-            if (incomingMessage.sender_id !== user.id) {
-              void markMessageRead(incomingMessage.id)
+            if (incoming.sender_id !== user.id) {
+              void markReceivedMessages(user.id, me.read_receipts_enabled !== false)
             }
           }
         )
         .on(
           "postgres_changes",
-          {
-            event: "UPDATE",
-            schema: "public",
-            table: "messages",
-            filter: `match_id=eq.${chatId}`,
-          },
+          { event: "UPDATE", schema: "public", table: "messages", filter: `match_id=eq.${chatId}` },
+          (payload) => setMessages((current) => mergeMessages(current, [payload.new as Message]))
+        )
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "message_reactions", filter: `match_id=eq.${chatId}` },
+          (payload) => setReactions((current) => mergeReactions(current, [payload.new as MessageReaction]))
+        )
+        .on(
+          "postgres_changes",
+          { event: "UPDATE", schema: "public", table: "message_reactions", filter: `match_id=eq.${chatId}` },
+          (payload) => setReactions((current) => mergeReactions(current, [payload.new as MessageReaction]))
+        )
+        .on(
+          "postgres_changes",
+          { event: "DELETE", schema: "public", table: "message_reactions" },
           (payload) => {
-            const updatedMessage = payload.new as Message
-            setMessages((current) => mergeMessages(current, [updatedMessage]))
-
-            if (updatedMessage.deleted_at) {
-              setEditingMessageId((current) => current === updatedMessage.id ? null : current)
-              setDeleteConfirmMessageId((current) => current === updatedMessage.id ? null : current)
-            }
+            const deletedId = (payload.old as { id?: string }).id
+            if (deletedId) setReactions((current) => current.filter((reaction) => reaction.id !== deletedId))
           }
         )
-        .subscribe((status) => {
-          if (!isMounted) return
-
+        .on(
+          "postgres_changes",
+          { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${other.id}` },
+          (payload) => setLastSeenAt((payload.new as { last_seen_at?: string }).last_seen_at || null)
+        )
+        .on(
+          "postgres_changes",
+          { event: "DELETE", schema: "public", table: "matches" },
+          (payload) => {
+            if ((payload.old as { id?: string }).id === chatId) router.push("/chat")
+          }
+        )
+        .subscribe(async (status) => {
+          if (!mounted) return
           if (status === "SUBSCRIBED") {
             setRealtimeStatus("live")
-            // Catch up once the socket is live so no startup message can be missed.
-            void loadMessages(user.id)
-          } else if (
-            status === "CHANNEL_ERROR" ||
-            status === "TIMED_OUT" ||
-            status === "CLOSED"
-          ) {
+            await channel.track({ user_id: user.id, online_at: new Date().toISOString() })
+            await loadLatestMessages()
+          } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
             setRealtimeStatus("offline")
           }
         })
 
-      await loadMessages(user.id)
-      if (isMounted) setLoading(false)
+      channelRef.current = channel
+      if (mounted) setLoading(false)
     }
 
-    void init()
+    void initialize()
 
     return () => {
-      isMounted = false
-      if (channel) void supabase.removeChannel(channel)
+      mounted = false
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current)
+      if (typingVisibleTimerRef.current) clearTimeout(typingVisibleTimerRef.current)
+      const channel = channelRef.current
+      channelRef.current = null
+      if (channel) {
+        void channel.untrack()
+        void supabase.removeChannel(channel)
+      }
     }
-  }, [chatId, router, supabase])
+  }, [chatId, hydrateMedia, loadLatestMessages, markReceivedMessages, router, supabase])
 
   useEffect(() => {
-    if (messages.length === 0) return
-    const frame = requestAnimationFrame(scrollToBottom)
+    if (!shouldScrollToBottomRef.current || messages.length === 0) return
+    shouldScrollToBottomRef.current = false
+    const frame = requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+    })
     return () => cancelAnimationFrame(frame)
   }, [messages.length])
 
-  function scrollToBottom() {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  useEffect(() => {
+    if (!safetyAction && !profileModalOpen) return
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSafetyAction(null)
+        setProfileModalOpen(false)
+      }
+    }
+    window.addEventListener("keydown", closeOnEscape)
+    return () => window.removeEventListener("keydown", closeOnEscape)
+  }, [profileModalOpen, safetyAction])
+
+  useEffect(() => {
+    if (!recording) return
+    const timer = setInterval(() => {
+      setRecordingSeconds(Math.floor((Date.now() - recordingStartedAtRef.current) / 1000))
+    }, 500)
+    return () => clearInterval(timer)
+  }, [recording])
+
+  const loadOlderMessages = async () => {
+    if (!hasMore || loadingMore || messages.length === 0) return
+    const container = scrollContainerRef.current
+    const previousHeight = container?.scrollHeight || 0
+    setLoadingMore(true)
+
+    const { data, error: loadError } = await supabase
+      .from("messages")
+      .select(MESSAGE_SELECT)
+      .eq("match_id", chatId)
+      .lt("created_at", messages[0].created_at)
+      .order("created_at", { ascending: false })
+      .limit(PAGE_SIZE)
+
+    if (!loadError && data) {
+      const rows = await hydrateMedia((data as unknown as Message[]).reverse())
+      setMessages((current) => mergeMessages(current, rows))
+      setHasMore(data.length === PAGE_SIZE)
+      await loadReactions(rows.map((message) => message.id))
+
+      requestAnimationFrame(() => {
+        if (container) container.scrollTop = container.scrollHeight - previousHeight
+      })
+    }
+
+    setLoadingMore(false)
   }
 
-  const handleNextPhoto = (event: React.MouseEvent) => {
-    event.stopPropagation()
-    if (!otherUserProfile) return
-    const allPhotos = otherUserProfile.photos?.filter(Boolean) || []
-    const photoCount = allPhotos.length > 0 ? allPhotos.length : 1
-    if (activePhotoIndex < photoCount - 1) {
-      setActivePhotoIndex((prev) => prev + 1)
-    }
+  const sendTyping = (isTyping: boolean) => {
+    const channel = channelRef.current
+    if (!channel || !currentUserId || realtimeStatus !== "live") return
+    void channel.send({
+      type: "broadcast",
+      event: "typing",
+      payload: { user_id: currentUserId, is_typing: isTyping },
+    })
   }
 
-  const handlePrevPhoto = (event: React.MouseEvent) => {
-    event.stopPropagation()
-    if (activePhotoIndex > 0) {
-      setActivePhotoIndex((prev) => prev - 1)
-    }
+  const updateComposer = (value: string) => {
+    setNewMessage(value)
+    setError(null)
+    sendTyping(Boolean(value.trim()))
+    if (typingTimerRef.current) clearTimeout(typingTimerRef.current)
+    typingTimerRef.current = setTimeout(() => sendTyping(false), 1200)
   }
 
-  const sendContent = async (content: string) => {
-    if (!content || !currentUserId) return false
+  const insertMessage = async (
+    payload: Partial<Message> & Pick<Message, "content" | "message_type">
+  ) => {
+    if (!currentUserId) return false
+    setComposerBusy(true)
+    setError(null)
 
-    setSendError(null)
-
-    // Optimistic insert
-    const tempId = `temp-${crypto.randomUUID()}`
-    const tempMsg: Message = {
-      id: tempId,
-      content,
-      sender_id: currentUserId,
-      created_at: new Date().toISOString()
-    }
-    setMessages(prev => [...prev, tempMsg])
-
-    const { data, error } = await supabase.from("messages").insert({
+    const temporary: Message = {
+      id: `temp-${crypto.randomUUID()}`,
       match_id: chatId,
       sender_id: currentUserId,
-      content: content
-    }).select().single()
-
-    if (error) {
-      // Remove temp message if failed
-      setMessages(prev => prev.filter(m => m.id !== tempId))
-      setSendError("Message wasn't sent. Please try again.")
-      return false
-    } else if (data) {
-      // Realtime may arrive before the insert response, so merge the saved row.
-      setMessages((current) =>
-        mergeMessages(current.filter((message) => message.id !== tempId), [data as Message])
-      )
+      created_at: new Date().toISOString(),
+      is_read: false,
+      edited_at: null,
+      deleted_at: null,
+      reply_to_id: payload.reply_to_id || null,
+      media_path: payload.media_path || null,
+      media_metadata: payload.media_metadata || {},
+      delivered_at: null,
+      read_at: null,
+      media_url: payload.media_url || null,
+      content: payload.content,
+      message_type: payload.message_type,
     }
 
+    shouldScrollToBottomRef.current = true
+    setMessages((current) => mergeMessages(current, [temporary]))
+
+    const { data, error: insertError } = await supabase
+      .from("messages")
+      .insert({
+        match_id: chatId,
+        sender_id: currentUserId,
+        content: payload.content,
+        message_type: payload.message_type,
+        media_path: payload.media_path || null,
+        media_metadata: payload.media_metadata || {},
+        reply_to_id: payload.reply_to_id || null,
+      })
+      .select(MESSAGE_SELECT)
+      .single()
+
+    if (insertError || !data) {
+      setMessages((current) => current.filter((message) => message.id !== temporary.id))
+      setError("Message wasn't sent. Please try again.")
+      setComposerBusy(false)
+      return false
+    }
+
+    const saved = { ...(data as unknown as Message), media_url: payload.media_url || null }
+    setMessages((current) => mergeMessages(
+      current.filter((message) => message.id !== temporary.id),
+      [saved]
+    ))
+    setReplyTo(null)
+    setComposerBusy(false)
     return true
   }
 
-  const sendMessage = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newMessage.trim()) return
+  const sendTextMessage = async () => {
     const content = newMessage.trim()
+    if (!content) return
     setNewMessage("")
-    const sent = await sendContent(content)
+    sendTyping(false)
+    const sent = await insertMessage({
+      content,
+      message_type: "text",
+      reply_to_id: replyTo?.id || null,
+    })
     if (!sent) setNewMessage((current) => current || content)
   }
 
-  const startEditing = (message: Message) => {
-    setDeleteConfirmMessageId(null)
-    setMessageActionError(null)
-    setEditingMessageId(message.id)
-    setEditDraft(message.content)
-  }
-
-  const cancelEditing = () => {
-    setEditingMessageId(null)
-    setEditDraft("")
-  }
-
-  const saveEdit = async (event: React.FormEvent, message: Message) => {
-    event.preventDefault()
-    const content = editDraft.trim()
-
-    if (!currentUserId || !content || content === message.content) {
-      cancelEditing()
+  const uploadMedia = async (
+    file: File,
+    type: Exclude<MessageType, "text">
+  ) => {
+    if (!currentUserId) return
+    const limit = type === "video" ? MAX_VIDEO_SIZE : type === "audio" ? MAX_AUDIO_SIZE : MAX_IMAGE_SIZE
+    if (file.size > limit) {
+      setError(`${type === "video" ? "Videos" : type === "audio" ? "Voice notes" : "Images"} must be under ${Math.round(limit / 1024 / 1024)} MB.`)
       return
     }
 
-    setPendingMessageId(message.id)
-    setMessageActionError(null)
+    setComposerBusy(true)
+    setError(null)
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-")
+    const path = `${chatId}/${currentUserId}/${crypto.randomUUID()}-${safeName}`
+    const { error: uploadError } = await supabase.storage
+      .from("chat-media")
+      .upload(path, file, { contentType: file.type, upsert: false })
 
-    const optimisticMessage: Message = {
+    if (uploadError) {
+      setError("Media upload failed. Please try again.")
+      setComposerBusy(false)
+      return
+    }
+
+    const { data: signedData } = await supabase.storage
+      .from("chat-media")
+      .createSignedUrl(path, 60 * 60)
+    const metadata: MediaMetadata = { name: file.name, size: file.size }
+    if (type === "audio") metadata.duration = recordingSeconds
+
+    const sent = await insertMessage({
+      content: newMessage.trim(),
+      message_type: type,
+      media_path: path,
+      media_url: signedData?.signedUrl || null,
+      media_metadata: metadata,
+      reply_to_id: replyTo?.id || null,
+    })
+
+    if (sent) {
+      setNewMessage("")
+    } else {
+      await supabase.storage.from("chat-media").remove([path])
+    }
+    setComposerBusy(false)
+  }
+
+  const startRecording = async () => {
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      setError("Voice recording is not supported in this browser.")
+      return
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const preferredType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : "audio/webm"
+      const recorder = new MediaRecorder(stream, { mimeType: preferredType })
+
+      mediaStreamRef.current = stream
+      mediaRecorderRef.current = recorder
+      recordingChunksRef.current = []
+      recordingCancelledRef.current = false
+      recordingStartedAtRef.current = Date.now()
+      setRecordingSeconds(0)
+      setRecording(true)
+      setError(null)
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) recordingChunksRef.current.push(event.data)
+      }
+      recorder.onstop = () => {
+        stream.getTracks().forEach((track) => track.stop())
+        setRecording(false)
+        if (recordingCancelledRef.current) {
+          recordingChunksRef.current = []
+          return
+        }
+
+        const blob = new Blob(recordingChunksRef.current, { type: preferredType })
+        const file = new File([blob], `voice-${Date.now()}.webm`, { type: "audio/webm" })
+        void uploadMedia(file, "audio")
+      }
+      recorder.start()
+    } catch {
+      setError("Microphone access is needed to record a voice note.")
+    }
+  }
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop()
+  }
+
+  const cancelRecording = () => {
+    recordingCancelledRef.current = true
+    stopRecording()
+  }
+
+  const editMessage = async (message: Message, content: string) => {
+    const previous = message
+    setMessages((current) => mergeMessages(current, [{
       ...message,
       content,
       edited_at: new Date().toISOString(),
-    }
-    setMessages((current) => mergeMessages(current, [optimisticMessage]))
+    }]))
 
-    const { data, error } = await supabase
+    const { data, error: editError } = await supabase
       .from("messages")
       .update({ content })
       .eq("id", message.id)
       .eq("sender_id", currentUserId)
       .is("deleted_at", null)
-      .select("id, content, sender_id, created_at, is_read, edited_at, deleted_at")
+      .select(MESSAGE_SELECT)
       .single()
 
-    if (error || !data) {
-      setMessages((current) => mergeMessages(current, [message]))
-      setMessageActionError("Message couldn't be edited. Please try again.")
-    } else {
-      setMessages((current) => mergeMessages(current, [data as Message]))
-      cancelEditing()
+    if (editError || !data) {
+      setMessages((current) => mergeMessages(current, [previous]))
+      setError("Message couldn't be edited.")
+      return false
     }
-
-    setPendingMessageId(null)
+    setMessages((current) => mergeMessages(current, [data as unknown as Message]))
+    return true
   }
 
   const deleteMessage = async (message: Message) => {
-    if (!currentUserId) return
-
-    setPendingMessageId(message.id)
-    setMessageActionError(null)
-
-    const optimisticMessage: Message = {
+    const previous = message
+    setMessages((current) => mergeMessages(current, [{
       ...message,
       content: "",
       deleted_at: new Date().toISOString(),
-    }
-    setMessages((current) => mergeMessages(current, [optimisticMessage]))
-    setDeleteConfirmMessageId(null)
+      media_path: null,
+      media_url: null,
+    }]))
 
-    const { data, error } = await supabase
+    const { data, error: deleteError } = await supabase
       .from("messages")
       .update({ deleted_at: new Date().toISOString() })
       .eq("id", message.id)
       .eq("sender_id", currentUserId)
       .is("deleted_at", null)
-      .select("id, content, sender_id, created_at, is_read, edited_at, deleted_at")
+      .select(MESSAGE_SELECT)
       .single()
 
-    if (error || !data) {
-      setMessages((current) => mergeMessages(current, [message]))
-      setMessageActionError("Message couldn't be deleted. Please try again.")
-    } else {
-      setMessages((current) => mergeMessages(current, [data as Message]))
+    if (deleteError || !data) {
+      setMessages((current) => mergeMessages(current, [previous]))
+      setError("Message couldn't be deleted.")
+      return false
     }
 
-    setPendingMessageId(null)
+    setMessages((current) => mergeMessages(current, [data as unknown as Message]))
+    setReactions((current) => current.filter((reaction) => reaction.message_id !== message.id))
+    if (message.media_path) await supabase.storage.from("chat-media").remove([message.media_path])
+    return true
   }
 
-  const ICEBREAKERS = [
-    "What's the best class you're taking this semester?",
-    "If you could teleport anywhere on campus right now, where would it be?",
-    "Late night study session or early morning grind?",
-    "What's your go-to spot for food around college?"
-  ]
+  const reactToMessage = async (message: Message, emoji: string) => {
+    if (!currentUserId) return
+    const snapshot = reactions
+    const existing = reactions.find(
+      (reaction) => reaction.message_id === message.id && reaction.user_id === currentUserId
+    )
+
+    if (existing?.emoji === emoji) {
+      setReactions((current) => current.filter((reaction) => reaction.id !== existing.id))
+      const { error: reactionError } = await supabase
+        .from("message_reactions")
+        .delete()
+        .eq("id", existing.id)
+      if (reactionError) setReactions(snapshot)
+      return
+    }
+
+    if (existing) {
+      const optimistic = { ...existing, emoji }
+      setReactions((current) => mergeReactions(current, [optimistic]))
+      const { data, error: reactionError } = await supabase
+        .from("message_reactions")
+        .update({ emoji })
+        .eq("id", existing.id)
+        .select("id, message_id, match_id, user_id, emoji, created_at")
+        .single()
+      if (reactionError || !data) setReactions(snapshot)
+      else setReactions((current) => mergeReactions(current, [data as MessageReaction]))
+      return
+    }
+
+    const optimistic: MessageReaction = {
+      id: `temp-${crypto.randomUUID()}`,
+      message_id: message.id,
+      match_id: chatId,
+      user_id: currentUserId,
+      emoji,
+      created_at: new Date().toISOString(),
+    }
+    setReactions((current) => mergeReactions(current, [optimistic]))
+    const { data, error: reactionError } = await supabase
+      .from("message_reactions")
+      .insert({ message_id: message.id, match_id: chatId, user_id: currentUserId, emoji })
+      .select("id, message_id, match_id, user_id, emoji, created_at")
+      .single()
+    if (reactionError || !data) setReactions(snapshot)
+    else setReactions((current) => mergeReactions(
+      current.filter((reaction) => reaction.id !== optimistic.id),
+      [data as MessageReaction]
+    ))
+  }
+
+  const toggleMute = async () => {
+    if (!currentUserId) return
+    setSafetyBusy(true)
+    if (muted) {
+      const { error: muteError } = await supabase
+        .from("muted_matches")
+        .delete()
+        .eq("match_id", chatId)
+        .eq("user_id", currentUserId)
+      if (!muteError) setMuted(false)
+    } else {
+      const { error: muteError } = await supabase
+        .from("muted_matches")
+        .insert({ match_id: chatId, user_id: currentUserId })
+      if (!muteError) setMuted(true)
+    }
+    setSafetyBusy(false)
+    setOptionsOpen(false)
+  }
+
+  const endConversation = async () => {
+    const { data: mediaRows } = await supabase
+      .from("messages")
+      .select("media_path")
+      .eq("match_id", chatId)
+      .not("media_path", "is", null)
+    const paths = (mediaRows || []).flatMap((row) => row.media_path ? [row.media_path] : [])
+    if (paths.length > 0) await supabase.storage.from("chat-media").remove(paths)
+
+    const { error: matchError } = await supabase.from("matches").delete().eq("id", chatId)
+    if (matchError) {
+      setError("Conversation couldn't be ended.")
+      return false
+    }
+    router.push("/chat")
+    return true
+  }
+
+  const runSafetyAction = async () => {
+    if (!currentUserId || !otherUserProfile || !safetyAction) return
+    setSafetyBusy(true)
+
+    if (safetyAction === "report") {
+      const { error: reportError } = await supabase.from("reports").insert({
+        reporter_id: currentUserId,
+        reported_id: otherUserProfile.id,
+        reason: reportReason,
+      })
+      if (reportError) setError("Report couldn't be submitted.")
+      else {
+        setSafetyAction(null)
+        setReportReason("")
+      }
+    } else if (safetyAction === "block") {
+      const { error: blockError } = await supabase.from("blocks").insert({
+        blocker_id: currentUserId,
+        blocked_id: otherUserProfile.id,
+      })
+      if (blockError) setError("This profile couldn't be blocked.")
+      else await endConversation()
+    } else {
+      await endConversation()
+    }
+
+    setSafetyBusy(false)
+  }
+
+  const handleNextPhoto = (event: React.MouseEvent) => {
+    event.stopPropagation()
+    const count = otherUserProfile?.photos?.filter(Boolean).length || 1
+    setActivePhotoIndex((current) => Math.min(current + 1, count - 1))
+  }
+
+  const handlePrevPhoto = (event: React.MouseEvent) => {
+    event.stopPropagation()
+    setActivePhotoIndex((current) => Math.max(current - 1, 0))
+  }
 
   if (loading) {
-    return (
-      <div className="flex h-full items-center justify-center bg-transparent">
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-      </div>
-    )
+    return <div className="flex h-full items-center justify-center text-sm font-bold">Loading conversation...</div>
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-transparent">
-      {/* Header */}
-      <div 
-        onClick={() => setProfileModalOpen(true)}
-        className="bg-background/90 backdrop-blur-md border-b border-border px-6 py-4 flex items-center gap-4 sticky top-0 z-10 cursor-pointer hover:bg-muted/50 transition-colors"
-      >
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden border border-border flex-shrink-0">
-            <img src={otherUserAvatar!} alt={otherUserName} className="w-full h-full object-cover" />
-          </div>
-          <div>
-            <h1 className="text-base font-bold">{otherUserName}</h1>
-            <p className="text-xs text-muted-foreground">
-              {realtimeStatus === "live"
-                ? "Live chat"
-                : realtimeStatus === "connecting"
-                  ? "Connecting..."
-                  : "Reconnecting..."}
-            </p>
-          </div>
-        </div>
-      </div>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-transparent">
+      <header className="relative flex flex-shrink-0 items-center justify-between gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur-md sm:px-6">
+        <button
+          type="button"
+          onClick={() => setProfileModalOpen(true)}
+          className="flex min-w-0 items-center gap-3 text-left"
+          aria-label={`View ${otherUserName}'s profile`}
+        >
+          <img src={otherUserAvatar} alt={otherUserName} className="size-10 flex-shrink-0 rounded-full border object-cover" />
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-bold sm:text-base">{otherUserName}</span>
+            <span className="block truncate text-xs text-muted-foreground" aria-live="polite">
+              {otherUserTyping
+                ? "Typing..."
+                : otherUserOnline
+                  ? "Online"
+                  : realtimeStatus === "offline"
+                    ? "Reconnecting..."
+                    : formatLastSeen(lastSeenAt)}
+            </span>
+          </span>
+        </button>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-5">
-        {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground p-4">
-            <div className="h-16 w-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-              <span className="text-2xl">👋</span>
+        <div className="relative">
+          <Button type="button" variant="outline" size="sm" onClick={() => setOptionsOpen((open) => !open)} aria-expanded={optionsOpen}>
+            Options
+          </Button>
+          {optionsOpen ? (
+            <div className="absolute right-0 top-full mt-2 flex w-48 flex-col gap-1 rounded-md border bg-background p-1.5 text-sm shadow-lg">
+              <button type="button" onClick={() => void toggleMute()} disabled={safetyBusy} className="rounded px-3 py-2 text-left hover:bg-muted">
+                {muted ? "Unmute conversation" : "Mute conversation"}
+              </button>
+              <button type="button" onClick={() => { setSafetyAction("report"); setOptionsOpen(false) }} className="rounded px-3 py-2 text-left hover:bg-muted">
+                Report profile
+              </button>
+              <button type="button" onClick={() => { setSafetyAction("block"); setOptionsOpen(false) }} className="rounded px-3 py-2 text-left text-destructive hover:bg-destructive/10">
+                Block profile
+              </button>
+              <button type="button" onClick={() => { setSafetyAction("unmatch"); setOptionsOpen(false) }} className="rounded px-3 py-2 text-left text-destructive hover:bg-destructive/10">
+                End conversation
+              </button>
             </div>
-            <p className="text-sm font-medium text-foreground">Say hi to {otherUserName}!</p>
-            <p className="text-xs mt-1 mb-6 max-w-xs">Send an icebreaker to start the conversation or type your own.</p>
-            
-            <div className="flex flex-col gap-2 w-full max-w-xs">
-              {ICEBREAKERS.map((prompt, i) => (
+          ) : null}
+        </div>
+      </header>
+
+      <div
+        ref={scrollContainerRef}
+        role="log"
+        aria-label={`Conversation with ${otherUserName}`}
+        aria-live="polite"
+        onScroll={(event) => {
+          const container = event.currentTarget
+          if (container.scrollTop < 80) void loadOlderMessages()
+          const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight
+          shouldScrollToBottomRef.current = distanceFromBottom < 160
+        }}
+        className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-3 sm:p-6"
+      >
+        {loadingMore ? <p className="text-center text-xs text-muted-foreground">Loading earlier messages...</p> : null}
+        {!hasMore && messages.length > 0 ? <p className="text-center text-xs text-muted-foreground">Start of conversation</p> : null}
+
+        {messages.length === 0 ? (
+          <div className="flex min-h-full flex-col items-center justify-center gap-4 px-4 text-center">
+            <div>
+              <p className="text-sm font-bold">Start a conversation with {otherUserName}</p>
+              <p className="mt-1 text-xs text-muted-foreground">A shared detail makes the first message easier.</p>
+            </div>
+            <div className="flex w-full max-w-md flex-col gap-2">
+              {conversationStarters.map((starter) => (
                 <button
-                  key={i}
-                  onClick={() => sendContent(prompt)}
-                  className="text-xs text-left px-4 py-3 rounded-xl border border-border bg-background hover:border-primary/50 hover:bg-primary/5 transition-colors shadow-sm"
+                  key={starter}
+                  type="button"
+                  onClick={() => updateComposer(starter)}
+                  className="rounded-md border bg-background px-4 py-3 text-left text-xs transition hover:border-primary hover:bg-primary/5"
                 >
-                  {prompt}
+                  {starter}
                 </button>
               ))}
             </div>
           </div>
         ) : (
-          messages.map((msg, index) => {
-            const isMe = msg.sender_id === currentUserId
-            const isEditing = editingMessageId === msg.id
-            const isPending = pendingMessageId === msg.id
-            const prevMsg = index > 0 ? messages[index - 1] : null
-            const showAvatar = !isMe && (!prevMsg || prevMsg.sender_id !== msg.sender_id)
-            const timeStr = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          messages.map((message, index) => {
+            const previous = index > 0 ? messages[index - 1] : null
+            const showDate = !previous || !sameCalendarDay(previous.created_at, message.created_at)
+            const showAvatar = message.sender_id !== currentUserId && (!previous || previous.sender_id !== message.sender_id)
 
             return (
-              <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} group`}>
-                <div className={`flex max-w-[75%] gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
-                  {/* Other user avatar (only shown on first msg in a group) */}
-                  {!isMe && (
-                    <div className="w-8 flex-shrink-0 flex items-end pb-1">
-                      {showAvatar && (
-                        <div className="h-8 w-8 rounded-full overflow-hidden border border-border">
-                          <img src={otherUserAvatar!} alt={otherUserName} className="w-full h-full object-cover" />
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-                    <div 
-                      className={`px-4 py-2 text-sm shadow-sm ${isPending ? "opacity-70" : ""} ${
-                        isMe 
-                          ? 'bg-primary text-primary-foreground rounded-2xl rounded-tr-sm' 
-                          : 'bg-background border border-border text-foreground rounded-2xl rounded-tl-sm'
-                      }`}
-                    >
-                      {isEditing ? (
-                        <form onSubmit={(event) => saveEdit(event, msg)} className="flex min-w-56 flex-col gap-2">
-                          <input
-                            value={editDraft}
-                            onChange={(event) => setEditDraft(event.target.value)}
-                            className="w-full rounded-md border border-black/20 bg-background px-2 py-1.5 text-foreground outline-none focus:border-foreground"
-                            aria-label="Edit message"
-                            autoFocus
-                          />
-                          <div className="flex justify-end gap-3 text-xs font-bold">
-                            <button type="button" onClick={cancelEditing}>Cancel</button>
-                            <button type="submit" disabled={!editDraft.trim() || isPending}>Save</button>
-                          </div>
-                        </form>
-                      ) : msg.deleted_at ? (
-                        <span className="italic opacity-70">Message deleted</span>
-                      ) : (
-                        msg.content
-                      )}
-                    </div>
-                    <div className="mt-1 flex items-center gap-3 px-1 text-[10px] text-muted-foreground">
-                      <span className="opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                        {timeStr}{msg.edited_at && !msg.deleted_at ? " · Edited" : ""}
-                      </span>
-                      {isMe && !msg.deleted_at && !isEditing && (
-                        deleteConfirmMessageId === msg.id ? (
-                          <div className="flex items-center gap-2 text-xs">
-                            <span>Delete for everyone?</span>
-                            <button
-                              type="button"
-                              onClick={() => setDeleteConfirmMessageId(null)}
-                              className="font-bold text-foreground"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => void deleteMessage(msg)}
-                              disabled={isPending}
-                              className="font-bold text-destructive"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex gap-3 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-                            <button
-                              type="button"
-                              onClick={() => startEditing(msg)}
-                              className="font-bold hover:text-foreground"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingMessageId(null)
-                                setMessageActionError(null)
-                                setDeleteConfirmMessageId(msg.id)
-                              }}
-                              className="font-bold hover:text-destructive"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        )
-                      )}
-                    </div>
+              <Fragment key={message.id}>
+                {showDate ? (
+                  <div className="flex items-center gap-3 py-1 text-[10px] font-bold uppercase text-muted-foreground" role="separator">
+                    <span className="h-px flex-1 bg-border" />
+                    <span>{formatMessageDate(message.created_at)}</span>
+                    <span className="h-px flex-1 bg-border" />
                   </div>
-                </div>
-              </div>
+                ) : null}
+                <MessageBubble
+                  message={message}
+                  replyMessage={message.reply_to_id ? messagesById.get(message.reply_to_id) || null : null}
+                  reactions={reactions.filter((reaction) => reaction.message_id === message.id)}
+                  currentUserId={currentUserId || ""}
+                  otherUserName={otherUserName}
+                  otherUserAvatar={otherUserAvatar}
+                  showAvatar={showAvatar}
+                  onReply={(selected) => {
+                    setReplyTo(selected)
+                    document.getElementById("chat-message")?.focus()
+                  }}
+                  onReact={reactToMessage}
+                  onEdit={editMessage}
+                  onDelete={deleteMessage}
+                />
+              </Fragment>
             )
           })
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
-      <div className="bg-background/90 backdrop-blur-md border-t border-border p-4 sticky bottom-0">
-        <div className="max-w-4xl mx-auto">
-          {messageActionError && (
-            <p role="alert" className="mb-2 text-xs font-semibold text-destructive">
-              {messageActionError}
-            </p>
-          )}
-          <form onSubmit={sendMessage} className="flex gap-2">
-            <input
-              type="text"
-              value={newMessage}
-              onChange={(e) => {
-                setNewMessage(e.target.value)
-                if (sendError) setSendError(null)
-              }}
-              placeholder={`Message ${otherUserName}...`}
-              className="flex-1 rounded-xl border border-input bg-background px-4 py-2.5 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 transition-all"
-              autoComplete="off"
+      <ChatComposer
+        value={newMessage}
+        otherUserName={otherUserName}
+        replyTo={replyTo}
+        busy={composerBusy}
+        recording={recording}
+        recordingSeconds={recordingSeconds}
+        error={error}
+        onChange={updateComposer}
+        onSend={sendTextMessage}
+        onCancelReply={() => setReplyTo(null)}
+        onUpload={uploadMedia}
+        onStartRecording={startRecording}
+        onStopRecording={stopRecording}
+        onCancelRecording={cancelRecording}
+      />
+
+      {profileModalOpen && otherUserProfile ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="chat-profile-title">
+          <div className="relative w-full max-w-4xl xl:max-w-5xl">
+            <h2 id="chat-profile-title" className="sr-only">{otherUserName}'s profile</h2>
+            <button type="button" onClick={() => setProfileModalOpen(false)} className="absolute -top-10 right-0 font-bold text-white">
+              Close
+            </button>
+            <ProfilePostCard
+              profile={otherUserProfile}
+              viewerProfile={currentUserProfile}
+              avatarUrl={otherUserAvatar}
+              photos={(otherUserProfile.photos || []).filter(Boolean) as string[]}
+              activePhotoIndex={activePhotoIndex}
+              onPrevPhoto={handlePrevPhoto}
+              onNextPhoto={handleNextPhoto}
             />
-            <Button
-              type="submit"
-              className="rounded-xl px-4 flex-shrink-0"
-              disabled={!newMessage.trim()}
-            >
-              <Send className="h-4 w-4" />
-            </Button>
-          </form>
-          {sendError && (
-            <p role="alert" className="mt-2 text-xs font-semibold text-destructive">
-              {sendError}
+          </div>
+        </div>
+      ) : null}
+
+      {safetyAction ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 backdrop-blur-sm sm:items-center" role="dialog" aria-modal="true" aria-labelledby="safety-title">
+          <div className="w-full max-w-sm rounded-lg border bg-background p-5 shadow-xl">
+            <h2 id="safety-title" className="text-lg font-bold">
+              {safetyAction === "report" ? `Report ${otherUserName}` : safetyAction === "block" ? `Block ${otherUserName}` : "End conversation"}
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {safetyAction === "report"
+                ? "Choose the reason that best describes the issue."
+                : safetyAction === "block"
+                  ? "This removes the match and prevents this profile from appearing again."
+                  : "This removes the match and conversation for both people."}
             </p>
-          )}
+
+            {safetyAction === "report" ? (
+              <div className="mt-4 flex flex-col gap-2">
+                {REPORT_REASONS.map((reason) => (
+                  <button
+                    key={reason}
+                    type="button"
+                    onClick={() => setReportReason(reason)}
+                    className={`rounded-md border px-3 py-2 text-left text-sm ${reportReason === reason ? "border-primary bg-primary/10" : "hover:bg-muted"}`}
+                    aria-pressed={reportReason === reason}
+                  >
+                    {reason}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="mt-5 flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => { setSafetyAction(null); setReportReason("") }}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => void runSafetyAction()}
+                disabled={safetyBusy || (safetyAction === "report" && !reportReason)}
+              >
+                {safetyAction === "report" ? "Submit report" : safetyAction === "block" ? "Block" : "End conversation"}
+              </Button>
+            </div>
+          </div>
         </div>
-      </div>
-    {profileModalOpen && otherUserProfile && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-        <div className="relative w-full max-w-4xl xl:max-w-5xl">
-          <button
-            onClick={() => setProfileModalOpen(false)}
-            className="absolute -top-12 right-0 flex h-10 w-10 items-center justify-center rounded-full bg-background/20 text-white hover:bg-background/40"
-          >
-            <X className="h-6 w-6" />
-          </button>
-          <ProfilePostCard
-            profile={otherUserProfile}
-            avatarUrl={otherUserAvatar!}
-            photos={otherUserProfile.photos?.filter(Boolean) as string[] || []}
-            activePhotoIndex={activePhotoIndex}
-            onPrevPhoto={handlePrevPhoto}
-            onNextPhoto={handleNextPhoto}
-          />
-        </div>
-      </div>
-    )}
+      ) : null}
     </div>
   )
 }

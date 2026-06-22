@@ -18,6 +18,7 @@ type ProfileSettings = {
   interested_interests: string[] | null
   interested_departments: string[] | null
   interested_years: string[] | null
+  read_receipts_enabled: boolean
 }
 
 type PreferenceKey = "interested_interests" | "interested_departments" | "interested_years"
@@ -51,7 +52,7 @@ export default function SettingsPage() {
 
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, is_visible, deletion_queued_at, has_password, interested_interests, interested_departments, interested_years")
+        .select("id, is_visible, deletion_queued_at, has_password, interested_interests, interested_departments, interested_years, read_receipts_enabled")
         .eq("id", user.id)
         .single()
 
@@ -320,6 +321,24 @@ export default function SettingsPage() {
                     onClick={() => updateSetting('is_visible', !settings.is_visible)}
                   >
                     {settings.is_visible ? "Hide Profile" : "Go Visible"}
+                  </Button>
+                </div>
+
+                <div className="flex items-start justify-between gap-4 border-t border-border/50 pt-4">
+                  <div className="min-w-0 flex-1">
+                    <h4 className="text-sm font-semibold">Read Receipts</h4>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                      When disabled, people can see that messages were delivered but not when you read them.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant={settings.read_receipts_enabled ? "default" : "outline"}
+                    className="flex-shrink-0"
+                    onClick={() => updateSetting("read_receipts_enabled", !settings.read_receipts_enabled)}
+                    aria-pressed={settings.read_receipts_enabled}
+                  >
+                    {settings.read_receipts_enabled ? "On" : "Off"}
                   </Button>
                 </div>
 

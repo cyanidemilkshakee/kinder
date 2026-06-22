@@ -64,6 +64,7 @@ export default function LikesPage() {
   const [activeIntent, setActiveIntent] = useState<RelationshipIntent>("friendship")
   const [loading, setLoading] = useState(true)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [viewerProfile, setViewerProfile] = useState<Liker | null>(null)
   const [swipingId, setSwipingId] = useState<string | null>(null)
   const [swipeDirection, setSwipeDirection] = useState<ProfileSwipeDirection | null>(null)
   const [touchStart, setTouchStart] = useState<TouchPoint | null>(null)
@@ -91,11 +92,20 @@ export default function LikesPage() {
     }
     setCurrentUserId(user.id)
 
-    const [rightSwipesRes, mySwipesRes, superLikesRes] = await Promise.all([
+    const [rightSwipesRes, mySwipesRes, superLikesRes, myProfileRes] = await Promise.all([
       supabase.from("swipes").select("swiper_id").eq("swiped_id", user.id).eq("is_right_swipe", true),
       supabase.from("swipes").select("swiped_id").eq("swiper_id", user.id),
       supabase.from("super_likes").select("sender_id").eq("receiver_id", user.id),
+      supabase
+        .from("profiles")
+        .select("id, username, real_name, department, year, gender, bio, relationship_intent, relationship_intents, avatar_url, photos, interest_tags, food_preference, drinking_habit, smoking_habit")
+        .eq("id", user.id)
+        .single(),
     ])
+
+    if (myProfileRes.data) {
+      setViewerProfile({ ...myProfileRes.data, isSuperLike: false } as Liker)
+    }
 
     const rightSwipes = rightSwipesRes.data || []
     const mySwipedIds = new Set((mySwipesRes.data || []).map((swipe) => swipe.swiped_id))
@@ -353,6 +363,7 @@ export default function LikesPage() {
             <div className="w-full max-w-4xl xl:max-w-5xl">
               <ProfilePostCard
                 profile={current}
+                viewerProfile={viewerProfile}
                 avatarUrl={avatar}
                 photos={allPhotos}
                 activePhotoIndex={activePhotoIndex}

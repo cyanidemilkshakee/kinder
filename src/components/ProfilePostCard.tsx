@@ -29,6 +29,7 @@ export type ProfileSwipeDirection = "left" | "right" | "up" | "down"
 
 type ProfilePostCardProps = {
   profile: PostProfile
+  viewerProfile?: PostProfile | null
   avatarUrl: string
   photos: string[]
   activePhotoIndex: number
@@ -41,6 +42,7 @@ type ProfilePostCardProps = {
 
 export function ProfilePostCard({
   profile,
+  viewerProfile,
   avatarUrl,
   photos,
   activePhotoIndex,
@@ -62,6 +64,26 @@ export function ProfilePostCard({
           : swipeDirection === "down"
             ? "animate-swipe-down"
             : ""
+
+  const viewerInterests = new Set(
+    (viewerProfile?.interest_tags || []).map((interest) => interest.toLowerCase())
+  )
+  const sharedInterests = (profile.interest_tags || []).filter((interest) =>
+    viewerInterests.has(interest.toLowerCase())
+  )
+  const mutualDetails = [
+    viewerProfile?.department && viewerProfile.department === profile.department
+      ? `Both study ${profile.department}`
+      : null,
+    viewerProfile?.year && viewerProfile.year === profile.year
+      ? `Both are in ${profile.year} year`
+      : null,
+    viewerProfile?.food_preference
+      && profile.food_preference
+      && viewerProfile.food_preference === profile.food_preference
+      ? `Same food preference: ${formatHabit(profile.food_preference)}`
+      : null,
+  ].filter(Boolean) as string[]
 
   return (
     <article
@@ -155,6 +177,18 @@ export function ProfilePostCard({
               Food: {formatHabit(profile.food_preference)} / Drinking: {formatHabit(profile.drinking_habit)} / Smoking: {formatHabit(profile.smoking_habit)}
             </p>
           </div>
+
+          {viewerProfile && (sharedInterests.length > 0 || mutualDetails.length > 0) && (
+            <div>
+              <p className="text-[15px] font-bold uppercase tracking-wide text-primary">Shared with you</p>
+              <div className="mt-2 flex flex-col gap-1 text-[13px] font-normal leading-relaxed text-foreground">
+                {sharedInterests.length > 0 && (
+                  <p>Shared interests: {sharedInterests.slice(0, 5).join(", ")}</p>
+                )}
+                {mutualDetails.map((detail) => <p key={detail}>{detail}</p>)}
+              </div>
+            </div>
+          )}
 
           {profile.interest_tags && profile.interest_tags.length > 0 && (
             <div>
