@@ -74,7 +74,7 @@ export function ChatSidebar() {
 
           const { data: lastMsg } = await supabase
             .from("messages")
-            .select("content, created_at")
+            .select("content, created_at, deleted_at")
             .eq("match_id", m.id)
             .order("created_at", { ascending: false })
             .limit(1)
@@ -90,7 +90,7 @@ export function ChatSidebar() {
           return {
             id: m.id,
             other_user: otherUser,
-            last_message: lastMsg?.content || null,
+            last_message: lastMsg?.deleted_at ? "Message deleted" : lastMsg?.content || null,
             last_message_at: lastMsg?.created_at || null,
             unread_count: unreadCount || 0,
           }

@@ -62,6 +62,8 @@ create table if not exists public.messages (
   sender_id uuid references public.profiles on delete cascade not null,
   content text not null,
   is_read boolean default false not null,
+  edited_at timestamp with time zone,
+  deleted_at timestamp with time zone,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
@@ -175,6 +177,70 @@ alter table public.confessions
   add column if not exists receiver_id uuid references public.profiles on delete cascade,
   add column if not exists receiver_username text;
 
+alter table public.messages
+  add column if not exists edited_at timestamp with time zone,
+  add column if not exists deleted_at timestamp with time zone;
+
+create or replace function public.enforce_message_update_rules()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  acting_user uuid := (select auth.uid());
+begin
+  if acting_user is null then
+    raise exception 'Authentication required';
+  end if;
+
+  if old.deleted_at is not null then
+    raise exception 'Deleted messages cannot be changed';
+  end if;
+
+  if acting_user = old.sender_id then
+    if new.match_id is distinct from old.match_id
+      or new.sender_id is distinct from old.sender_id
+      or new.created_at is distinct from old.created_at
+      or new.is_read is distinct from old.is_read then
+      raise exception 'Senders can only edit or delete their message content';
+    end if;
+
+    if new.deleted_at is not null then
+      new.content := '';
+      new.deleted_at := timezone('utc'::text, now());
+    elsif new.content is distinct from old.content then
+      new.content := btrim(new.content);
+      if new.content = '' then
+        raise exception 'Message content cannot be empty';
+      end if;
+      new.edited_at := timezone('utc'::text, now());
+    elsif new.edited_at is distinct from old.edited_at then
+      raise exception 'Edited timestamp is managed by the database';
+    end if;
+  else
+    if new.match_id is distinct from old.match_id
+      or new.sender_id is distinct from old.sender_id
+      or new.content is distinct from old.content
+      or new.created_at is distinct from old.created_at
+      or new.edited_at is distinct from old.edited_at
+      or new.deleted_at is distinct from old.deleted_at
+      or new.is_read is not true then
+      raise exception 'Recipients can only mark messages as read';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+revoke all on function public.enforce_message_update_rules() from public;
+
+drop trigger if exists enforce_message_update_rules on public.messages;
+create trigger enforce_message_update_rules
+before update on public.messages
+for each row execute function public.enforce_message_update_rules();
+
 -- RLS POLICIES
 alter table public.profiles enable row level security;
 alter table public.swipes enable row level security;
@@ -235,13 +301,35 @@ with check (
 );
 
 drop policy if exists "Users can update messages of their matches" on messages;
-create policy "Users can update messages of their matches" on messages for update
+drop policy if exists "Users can edit their own messages" on messages;
+drop policy if exists "Recipients can mark messages as read" on messages;
+
+create policy "Users can edit their own messages" on messages for update
+to authenticated
+using (
+  auth.uid() = sender_id and
+  exists (
+    select 1 from matches 
+    where id = messages.match_id 
+    and (user1_id = auth.uid() or user2_id = auth.uid())
+  )
+)
+with check (
+  auth.uid() = sender_id and
+  exists (
+    select 1 from matches
+    where id = messages.match_id
+    and (user1_id = auth.uid() or user2_id = auth.uid())
+  )
+);
+
+create policy "Recipients can mark messages as read" on messages for update
 to authenticated
 using (
   auth.uid() != sender_id and
   exists (
-    select 1 from matches 
-    where id = messages.match_id 
+    select 1 from matches
+    where id = messages.match_id
     and (user1_id = auth.uid() or user2_id = auth.uid())
   )
 )
@@ -254,10 +342,10 @@ with check (
   )
 );
 
--- Chat clients can mark received messages as read, but cannot edit message content.
+-- The trigger separates sender edits from recipient read-status updates.
 grant select, insert on table public.messages to authenticated;
 revoke update on table public.messages from authenticated;
-grant update (is_read) on table public.messages to authenticated;
+grant update (content, edited_at, deleted_at, is_read) on table public.messages to authenticated;
 
 -- Confessions Policies
 drop policy if exists "Users can view own or approved confessions" on confessions;

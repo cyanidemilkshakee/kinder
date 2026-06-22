@@ -14,6 +14,8 @@ type Message = {
   sender_id: string
   created_at: string
   is_read?: boolean
+  edited_at?: string | null
+  deleted_at?: string | null
 }
 
 type RealtimeStatus = "connecting" | "live" | "offline"
@@ -45,6 +47,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [loading, setLoading] = useState(true)
   const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>("connecting")
   const [sendError, setSendError] = useState<string | null>(null)
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
+  const [editDraft, setEditDraft] = useState("")
+  const [deleteConfirmMessageId, setDeleteConfirmMessageId] = useState<string | null>(null)
+  const [pendingMessageId, setPendingMessageId] = useState<string | null>(null)
+  const [messageActionError, setMessageActionError] = useState<string | null>(null)
 
   const router = useRouter()
   const [supabase] = useState(() => createClient())
@@ -64,7 +71,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     const loadMessages = async (userId: string) => {
       const { data, error } = await supabase
         .from("messages")
-        .select("id, content, sender_id, created_at, is_read")
+        .select("id, content, sender_id, created_at, is_read, edited_at, deleted_at")
         .eq("match_id", chatId)
         .order("created_at", { ascending: true })
 
@@ -146,6 +153,24 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
             if (incomingMessage.sender_id !== user.id) {
               void markMessageRead(incomingMessage.id)
+            }
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "messages",
+            filter: `match_id=eq.${chatId}`,
+          },
+          (payload) => {
+            const updatedMessage = payload.new as Message
+            setMessages((current) => mergeMessages(current, [updatedMessage]))
+
+            if (updatedMessage.deleted_at) {
+              setEditingMessageId((current) => current === updatedMessage.id ? null : current)
+              setDeleteConfirmMessageId((current) => current === updatedMessage.id ? null : current)
             }
           }
         )
@@ -249,6 +274,90 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     if (!sent) setNewMessage((current) => current || content)
   }
 
+  const startEditing = (message: Message) => {
+    setDeleteConfirmMessageId(null)
+    setMessageActionError(null)
+    setEditingMessageId(message.id)
+    setEditDraft(message.content)
+  }
+
+  const cancelEditing = () => {
+    setEditingMessageId(null)
+    setEditDraft("")
+  }
+
+  const saveEdit = async (event: React.FormEvent, message: Message) => {
+    event.preventDefault()
+    const content = editDraft.trim()
+
+    if (!currentUserId || !content || content === message.content) {
+      cancelEditing()
+      return
+    }
+
+    setPendingMessageId(message.id)
+    setMessageActionError(null)
+
+    const optimisticMessage: Message = {
+      ...message,
+      content,
+      edited_at: new Date().toISOString(),
+    }
+    setMessages((current) => mergeMessages(current, [optimisticMessage]))
+
+    const { data, error } = await supabase
+      .from("messages")
+      .update({ content })
+      .eq("id", message.id)
+      .eq("sender_id", currentUserId)
+      .is("deleted_at", null)
+      .select("id, content, sender_id, created_at, is_read, edited_at, deleted_at")
+      .single()
+
+    if (error || !data) {
+      setMessages((current) => mergeMessages(current, [message]))
+      setMessageActionError("Message couldn't be edited. Please try again.")
+    } else {
+      setMessages((current) => mergeMessages(current, [data as Message]))
+      cancelEditing()
+    }
+
+    setPendingMessageId(null)
+  }
+
+  const deleteMessage = async (message: Message) => {
+    if (!currentUserId) return
+
+    setPendingMessageId(message.id)
+    setMessageActionError(null)
+
+    const optimisticMessage: Message = {
+      ...message,
+      content: "",
+      deleted_at: new Date().toISOString(),
+    }
+    setMessages((current) => mergeMessages(current, [optimisticMessage]))
+    setDeleteConfirmMessageId(null)
+
+    const { data, error } = await supabase
+      .from("messages")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", message.id)
+      .eq("sender_id", currentUserId)
+      .is("deleted_at", null)
+      .select("id, content, sender_id, created_at, is_read, edited_at, deleted_at")
+      .single()
+
+    if (error || !data) {
+      setMessages((current) => mergeMessages(current, [message]))
+      setMessageActionError("Message couldn't be deleted. Please try again.")
+    } else {
+      setMessages((current) => mergeMessages(current, [data as Message]))
+    }
+
+    setPendingMessageId(null)
+  }
+
   const ICEBREAKERS = [
     "What's the best class you're taking this semester?",
     "If you could teleport anywhere on campus right now, where would it be?",
@@ -313,6 +422,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         ) : (
           messages.map((msg, index) => {
             const isMe = msg.sender_id === currentUserId
+            const isEditing = editingMessageId === msg.id
+            const isPending = pendingMessageId === msg.id
             const prevMsg = index > 0 ? messages[index - 1] : null
             const showAvatar = !isMe && (!prevMsg || prevMsg.sender_id !== msg.sender_id)
             const timeStr = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -333,17 +444,80 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
                   <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                     <div 
-                      className={`px-4 py-2 text-sm shadow-sm ${
+                      className={`px-4 py-2 text-sm shadow-sm ${isPending ? "opacity-70" : ""} ${
                         isMe 
                           ? 'bg-primary text-primary-foreground rounded-2xl rounded-tr-sm' 
                           : 'bg-background border border-border text-foreground rounded-2xl rounded-tl-sm'
                       }`}
                     >
-                      {msg.content}
+                      {isEditing ? (
+                        <form onSubmit={(event) => saveEdit(event, msg)} className="flex min-w-56 flex-col gap-2">
+                          <input
+                            value={editDraft}
+                            onChange={(event) => setEditDraft(event.target.value)}
+                            className="w-full rounded-md border border-black/20 bg-background px-2 py-1.5 text-foreground outline-none focus:border-foreground"
+                            aria-label="Edit message"
+                            autoFocus
+                          />
+                          <div className="flex justify-end gap-3 text-xs font-bold">
+                            <button type="button" onClick={cancelEditing}>Cancel</button>
+                            <button type="submit" disabled={!editDraft.trim() || isPending}>Save</button>
+                          </div>
+                        </form>
+                      ) : msg.deleted_at ? (
+                        <span className="italic opacity-70">Message deleted</span>
+                      ) : (
+                        msg.content
+                      )}
                     </div>
-                    <span className="text-[10px] text-muted-foreground mt-1 px-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {timeStr}
-                    </span>
+                    <div className="mt-1 flex items-center gap-3 px-1 text-[10px] text-muted-foreground">
+                      <span className="opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                        {timeStr}{msg.edited_at && !msg.deleted_at ? " · Edited" : ""}
+                      </span>
+                      {isMe && !msg.deleted_at && !isEditing && (
+                        deleteConfirmMessageId === msg.id ? (
+                          <div className="flex items-center gap-2 text-xs">
+                            <span>Delete for everyone?</span>
+                            <button
+                              type="button"
+                              onClick={() => setDeleteConfirmMessageId(null)}
+                              className="font-bold text-foreground"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void deleteMessage(msg)}
+                              disabled={isPending}
+                              className="font-bold text-destructive"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex gap-3 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                            <button
+                              type="button"
+                              onClick={() => startEditing(msg)}
+                              className="font-bold hover:text-foreground"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingMessageId(null)
+                                setMessageActionError(null)
+                                setDeleteConfirmMessageId(msg.id)
+                              }}
+                              className="font-bold hover:text-destructive"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        )
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -356,6 +530,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       {/* Input */}
       <div className="bg-background/90 backdrop-blur-md border-t border-border p-4 sticky bottom-0">
         <div className="max-w-4xl mx-auto">
+          {messageActionError && (
+            <p role="alert" className="mb-2 text-xs font-semibold text-destructive">
+              {messageActionError}
+            </p>
+          )}
           <form onSubmit={sendMessage} className="flex gap-2">
             <input
               type="text"
