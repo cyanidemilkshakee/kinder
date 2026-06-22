@@ -65,6 +65,26 @@ create table if not exists public.messages (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+create index if not exists messages_match_created_at_idx
+  on public.messages (match_id, created_at);
+
+-- Realtime Postgres Changes only emits rows from tables in this publication.
+do $$
+begin
+  if exists (
+    select 1 from pg_publication where pubname = 'supabase_realtime'
+  ) and not exists (
+    select 1
+    from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'messages'
+  ) then
+    execute 'alter publication supabase_realtime add table public.messages';
+  end if;
+end
+$$;
+
 -- CONFESSIONS
 create table if not exists public.confessions (
   id uuid default uuid_generate_v4() primary key,
@@ -192,7 +212,9 @@ create policy "Users can insert matches" on matches for insert with check (auth.
 
 -- Messages Policies
 drop policy if exists "Users can view messages of their matches" on messages;
-create policy "Users can view messages of their matches" on messages for select using (
+create policy "Users can view messages of their matches" on messages for select
+to authenticated
+using (
   exists (
     select 1 from matches 
     where id = messages.match_id 
@@ -201,7 +223,9 @@ create policy "Users can view messages of their matches" on messages for select 
 );
 
 drop policy if exists "Users can insert messages to their matches" on messages;
-create policy "Users can insert messages to their matches" on messages for insert with check (
+create policy "Users can insert messages to their matches" on messages for insert
+to authenticated
+with check (
   auth.uid() = sender_id and
   exists (
     select 1 from matches 
@@ -211,14 +235,29 @@ create policy "Users can insert messages to their matches" on messages for inser
 );
 
 drop policy if exists "Users can update messages of their matches" on messages;
-create policy "Users can update messages of their matches" on messages for update using (
+create policy "Users can update messages of their matches" on messages for update
+to authenticated
+using (
   auth.uid() != sender_id and
   exists (
     select 1 from matches 
     where id = messages.match_id 
     and (user1_id = auth.uid() or user2_id = auth.uid())
   )
+)
+with check (
+  auth.uid() != sender_id and
+  exists (
+    select 1 from matches
+    where id = messages.match_id
+    and (user1_id = auth.uid() or user2_id = auth.uid())
+  )
 );
+
+-- Chat clients can mark received messages as read, but cannot edit message content.
+grant select, insert on table public.messages to authenticated;
+revoke update on table public.messages from authenticated;
+grant update (is_read) on table public.messages to authenticated;
 
 -- Confessions Policies
 drop policy if exists "Users can view own or approved confessions" on confessions;

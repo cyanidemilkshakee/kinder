@@ -16,6 +16,20 @@ type Message = {
   is_read?: boolean
 }
 
+type RealtimeStatus = "connecting" | "live" | "offline"
+
+function mergeMessages(current: Message[], incoming: Message[]) {
+  const messagesById = new Map(current.map((message) => [message.id, message]))
+
+  for (const message of incoming) {
+    messagesById.set(message.id, message)
+  }
+
+  return Array.from(messagesById.values()).sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  )
+}
+
 export default function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params)
   const chatId = resolvedParams.id
@@ -29,57 +43,145 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [profileModalOpen, setProfileModalOpen] = useState(false)
   const [activePhotoIndex, setActivePhotoIndex] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>("connecting")
+  const [sendError, setSendError] = useState<string | null>(null)
 
   const router = useRouter()
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    let channel: any
+    let channel: ReturnType<typeof supabase.channel> | null = null
     let isMounted = true
 
-    const init = async () => {
-      const user = await setupChat()
-      if (!user || !isMounted) return
+    const markMessageRead = async (messageId: string) => {
+      await supabase
+        .from("messages")
+        .update({ is_read: true })
+        .eq("id", messageId)
+    }
 
-      // Subscribe to new messages
+    const loadMessages = async (userId: string) => {
+      const { data, error } = await supabase
+        .from("messages")
+        .select("id, content, sender_id, created_at, is_read")
+        .eq("match_id", chatId)
+        .order("created_at", { ascending: true })
+
+      if (!isMounted || error || !data) return
+
+      setMessages((current) => mergeMessages(current, data as Message[]))
+
+      const hasUnread = data.some(
+        (message) => message.sender_id !== userId && !message.is_read
+      )
+
+      if (hasUnread) {
+        await supabase
+          .from("messages")
+          .update({ is_read: true })
+          .eq("match_id", chatId)
+          .neq("sender_id", userId)
+          .eq("is_read", false)
+      }
+    }
+
+    const init = async () => {
+      setLoading(true)
+      setRealtimeStatus("connecting")
+
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        router.push("/")
+        return
+      }
+
+      if (!isMounted) return
+      setCurrentUserId(user.id)
+
+      const { data: matchData, error: matchError } = await supabase
+        .from("matches")
+        .select(`
+          user1:profiles!user1_id(id, username, real_name, department, year, gender, bio, relationship_intent, relationship_intents, avatar_url, photos, interest_tags, food_preference, drinking_habit, smoking_habit),
+          user2:profiles!user2_id(id, username, real_name, department, year, gender, bio, relationship_intent, relationship_intents, avatar_url, photos, interest_tags, food_preference, drinking_habit, smoking_habit)
+        `)
+        .eq("id", chatId)
+        .single()
+
+      if (!isMounted) return
+
+      if (matchError || !matchData) {
+        router.push("/chat")
+        return
+      }
+
+      const user1 = Array.isArray(matchData.user1) ? matchData.user1[0] : matchData.user1
+      const user2 = Array.isArray(matchData.user2) ? matchData.user2[0] : matchData.user2
+      const otherUser = user1?.id === user.id ? user2 : user1
+
+      if (!otherUser) {
+        router.push("/chat")
+        return
+      }
+
+      setOtherUserName(otherUser.real_name)
+      setOtherUserAvatar(
+        otherUser.avatar_url || `https://api.dicebear.com/9.x/micah/svg?seed=${otherUser.id}`
+      )
+      setOtherUserProfile(otherUser as PostProfile)
+
       channel = supabase
-        .channel(`chat-${chatId}-${Date.now()}`)
+        .channel(`chat-${chatId}`)
         .on(
-          'postgres_changes',
+          "postgres_changes",
           {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'messages',
-            filter: `match_id=eq.${chatId}`
+            event: "INSERT",
+            schema: "public",
+            table: "messages",
+            filter: `match_id=eq.${chatId}`,
           },
           (payload) => {
-            setMessages((prev) => {
-              if (prev.some(m => m.id === payload.new.id)) return prev
-              return [...prev, payload.new as Message]
-            })
-            setTimeout(scrollToBottom, 50)
+            const incomingMessage = payload.new as Message
+            setMessages((current) => mergeMessages(current, [incomingMessage]))
 
-            // If we receive a message from the other person while in this chat, mark it as read immediately
-            if (payload.new.sender_id !== user.id) {
-              supabase
-                .from("messages")
-                .update({ is_read: true })
-                .eq("id", payload.new.id)
-                .then()
+            if (incomingMessage.sender_id !== user.id) {
+              void markMessageRead(incomingMessage.id)
             }
           }
         )
-        .subscribe()
+        .subscribe((status) => {
+          if (!isMounted) return
+
+          if (status === "SUBSCRIBED") {
+            setRealtimeStatus("live")
+            // Catch up once the socket is live so no startup message can be missed.
+            void loadMessages(user.id)
+          } else if (
+            status === "CHANNEL_ERROR" ||
+            status === "TIMED_OUT" ||
+            status === "CLOSED"
+          ) {
+            setRealtimeStatus("offline")
+          }
+        })
+
+      await loadMessages(user.id)
+      if (isMounted) setLoading(false)
     }
 
-    init()
+    void init()
 
     return () => {
       isMounted = false
-      if (channel) supabase.removeChannel(channel)
+      if (channel) void supabase.removeChannel(channel)
     }
-  }, [chatId])
+  }, [chatId, router, supabase])
+
+  useEffect(() => {
+    if (messages.length === 0) return
+    const frame = requestAnimationFrame(scrollToBottom)
+    return () => cancelAnimationFrame(frame)
+  }, [messages.length])
 
   function scrollToBottom() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -102,64 +204,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
   }
 
-  async function setupChat() {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { router.push("/"); return null }
-    setCurrentUserId(user.id)
-
-    // Fetch match info to get other user's name
-    const { data: matchData, error: matchError } = await supabase
-      .from("matches")
-      .select(`
-        user1:profiles!user1_id(id, username, real_name, department, year, gender, bio, relationship_intent, relationship_intents, avatar_url, photos, interest_tags, food_preference, drinking_habit, smoking_habit),
-        user2:profiles!user2_id(id, username, real_name, department, year, gender, bio, relationship_intent, relationship_intents, avatar_url, photos, interest_tags, food_preference, drinking_habit, smoking_habit)
-      `)
-      .eq("id", chatId)
-      .single()
-
-    if (matchError || !matchData) {
-      router.push("/chat")
-      return
-    }
-
-    const user1 = Array.isArray(matchData.user1) ? matchData.user1[0] : (matchData.user1 as any)
-    const user2 = Array.isArray(matchData.user2) ? matchData.user2[0] : (matchData.user2 as any)
-    const otherUser = user1.id === user.id ? user2 : user1
-    setOtherUserName(otherUser.real_name)
-    setOtherUserAvatar(otherUser.avatar_url || `https://api.dicebear.com/9.x/micah/svg?seed=${otherUser.id}`)
-    setOtherUserProfile(otherUser)
-
-    // Fetch previous messages
-    const { data: messageData } = await supabase
-      .from("messages")
-      .select("*")
-      .eq("match_id", chatId)
-      .order("created_at", { ascending: true })
-
-    if (messageData) {
-      setMessages(messageData)
-      setTimeout(scrollToBottom, 100)
-
-      // Mark unread messages as read
-      const hasUnread = messageData.some((m: any) => m.sender_id !== user.id && !m.is_read)
-      if (hasUnread) {
-        await supabase
-          .from("messages")
-          .update({ is_read: true })
-          .eq("match_id", chatId)
-          .neq("sender_id", user.id)
-          .eq("is_read", false)
-      }
-    }
-    setLoading(false)
-    return user
-  }
-
   const sendContent = async (content: string) => {
-    if (!content || !currentUserId) return
+    if (!content || !currentUserId) return false
+
+    setSendError(null)
 
     // Optimistic insert
-    const tempId = `temp-${Date.now()}`
+    const tempId = `temp-${crypto.randomUUID()}`
     const tempMsg: Message = {
       id: tempId,
       content,
@@ -167,7 +218,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       created_at: new Date().toISOString()
     }
     setMessages(prev => [...prev, tempMsg])
-    setTimeout(scrollToBottom, 50)
 
     const { data, error } = await supabase.from("messages").insert({
       match_id: chatId,
@@ -178,10 +228,16 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     if (error) {
       // Remove temp message if failed
       setMessages(prev => prev.filter(m => m.id !== tempId))
+      setSendError("Message wasn't sent. Please try again.")
+      return false
     } else if (data) {
-      // Replace temp message with real one
-      setMessages(prev => prev.map(m => m.id === tempId ? data : m))
+      // Realtime may arrive before the insert response, so merge the saved row.
+      setMessages((current) =>
+        mergeMessages(current.filter((message) => message.id !== tempId), [data as Message])
+      )
     }
+
+    return true
   }
 
   const sendMessage = async (e: React.FormEvent) => {
@@ -189,7 +245,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     if (!newMessage.trim()) return
     const content = newMessage.trim()
     setNewMessage("")
-    await sendContent(content)
+    const sent = await sendContent(content)
+    if (!sent) setNewMessage((current) => current || content)
   }
 
   const ICEBREAKERS = [
@@ -220,7 +277,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           </div>
           <div>
             <h1 className="text-base font-bold">{otherUserName}</h1>
-            <p className="text-xs text-muted-foreground">Matched</p>
+            <p className="text-xs text-muted-foreground">
+              {realtimeStatus === "live"
+                ? "Live chat"
+                : realtimeStatus === "connecting"
+                  ? "Connecting..."
+                  : "Reconnecting..."}
+            </p>
           </div>
         </div>
       </div>
@@ -292,23 +355,33 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
       {/* Input */}
       <div className="bg-background/90 backdrop-blur-md border-t border-border p-4 sticky bottom-0">
-        <form onSubmit={sendMessage} className="flex gap-2 max-w-4xl mx-auto">
-          <input
-            type="text"
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            placeholder={`Message ${otherUserName}...`}
-            className="flex-1 rounded-xl border border-input bg-background px-4 py-2.5 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 transition-all"
-            autoComplete="off"
-          />
-          <Button 
-            type="submit" 
-            className="rounded-xl px-4 flex-shrink-0" 
-            disabled={!newMessage.trim()}
-          >
-            <Send className="h-4 w-4" />
-          </Button>
-        </form>
+        <div className="max-w-4xl mx-auto">
+          <form onSubmit={sendMessage} className="flex gap-2">
+            <input
+              type="text"
+              value={newMessage}
+              onChange={(e) => {
+                setNewMessage(e.target.value)
+                if (sendError) setSendError(null)
+              }}
+              placeholder={`Message ${otherUserName}...`}
+              className="flex-1 rounded-xl border border-input bg-background px-4 py-2.5 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 transition-all"
+              autoComplete="off"
+            />
+            <Button 
+              type="submit" 
+              className="rounded-xl px-4 flex-shrink-0" 
+              disabled={!newMessage.trim()}
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          </form>
+          {sendError && (
+            <p role="alert" className="mt-2 text-xs font-semibold text-destructive">
+              {sendError}
+            </p>
+          )}
+        </div>
       </div>
     {profileModalOpen && otherUserProfile && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
