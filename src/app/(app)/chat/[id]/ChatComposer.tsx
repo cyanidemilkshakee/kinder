@@ -97,12 +97,13 @@ export function ChatComposer({
             event.preventDefault()
             void onSend()
           }}
-          className="flex w-full items-end gap-2"
+          className="flex w-full items-center gap-2"
         >
           <Button
             type="button"
             variant="ghost"
             size="icon"
+            className="size-10 self-center rounded-full [&_svg]:size-5"
             onClick={() => setStartersOpen((open) => !open)}
             aria-label="Conversation starters"
             title="Conversation starters"
@@ -126,36 +127,36 @@ export function ChatComposer({
               }}
               placeholder="Send message..."
               rows={1}
-              className="max-h-32 min-h-11 w-full resize-y rounded-lg border border-input bg-background py-2.5 pl-3 pr-40 text-sm outline-none transition focus:border-primary focus:ring-1 focus:ring-primary/50"
+              className="max-h-32 min-h-14 w-full resize-y rounded-lg border border-input bg-background py-4 pl-4 pr-48 text-sm outline-none transition focus:border-primary focus:ring-1 focus:ring-primary/50"
               autoComplete="off"
               disabled={recording}
             />
 
-            <div className="absolute bottom-1.5 right-1.5 flex items-center gap-0.5">
+            <div className="absolute inset-y-0 right-2 flex items-center gap-1">
               {recording ? (
                 <>
                   <span className="px-1 text-[10px] font-bold text-destructive" aria-live="polite">{recordingSeconds}s</span>
-                  <Button type="button" variant="ghost" size="icon-sm" onClick={onCancelRecording} aria-label="Cancel voice note" title="Cancel voice note">
-                    <X />
+                  <Button type="button" variant="ghost" size="icon" className="size-10 rounded-full [&_svg]:size-5" onClick={onCancelRecording} aria-label="Cancel voice note" title="Cancel voice note">
+                    <X className="size-5" />
                   </Button>
-                  <Button type="button" variant="destructive" size="icon-sm" onClick={onStopRecording} aria-label="Stop and send voice note" title="Stop and send voice note">
-                    <MicOff />
+                  <Button type="button" variant="destructive" size="icon" className="size-10 rounded-full [&_svg]:size-5" onClick={onStopRecording} aria-label="Stop and send voice note" title="Stop and send voice note">
+                    <MicOff className="size-5" />
                   </Button>
                 </>
               ) : (
-                <Button type="button" variant="ghost" size="icon-sm" onClick={() => void onStartRecording()} disabled={busy} aria-label="Record voice note" title="Record voice note">
-                  <Mic />
+                <Button type="button" variant="ghost" size="icon" className="size-10 rounded-full [&_svg]:size-5" onClick={() => void onStartRecording()} disabled={busy} aria-label="Record voice note" title="Record voice note">
+                  <Mic className="size-5" />
                 </Button>
               )}
 
-              <Button type="button" variant="ghost" size="icon-sm" onClick={() => mediaInputRef.current?.click()} disabled={busy || recording} aria-label="Add photo or video" title="Media">
-                <Paperclip />
+              <Button type="button" variant="ghost" size="icon" className="size-10 rounded-full [&_svg]:size-5" onClick={() => mediaInputRef.current?.click()} disabled={busy || recording} aria-label="Add photo or video" title="Media">
+                <Paperclip className="size-5" />
               </Button>
-              <Button type="button" variant="ghost" size="icon-sm" onClick={() => gifInputRef.current?.click()} disabled={busy || recording} aria-label="Add GIF" title="GIF">
-                <FileImage />
+              <Button type="button" variant="ghost" size="icon" className="size-10 rounded-full [&_svg]:size-5" onClick={() => gifInputRef.current?.click()} disabled={busy || recording} aria-label="Add GIF" title="GIF">
+                <FileImage className="size-5" />
               </Button>
-              <Button type="submit" size="icon-sm" disabled={!value.trim() || busy || recording} aria-label="Send message" title="Send message">
-                <Send />
+              <Button type="submit" size="icon" className="size-10 rounded-full [&_svg]:size-5" disabled={!value.trim() || busy || recording} aria-label="Send message" title="Send message">
+                <Send className="size-5" />
               </Button>
             </div>
           </div>
