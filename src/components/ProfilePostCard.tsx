@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 "use client"
 
-import { ChevronLeft, ChevronRight, Cigarette, Star, Wine } from "lucide-react"
+import { ChevronLeft, ChevronRight, Cigarette, Star, Utensils, Wine } from "lucide-react"
 import {
   formatHabit,
 } from "@/lib/profile-options"
@@ -75,19 +75,25 @@ export function ProfilePostCard({
   const orderedInterests = [...(profile.interest_tags || [])].sort((a, b) =>
     Number(sharedInterestKeys.has(b.toLowerCase())) - Number(sharedInterestKeys.has(a.toLowerCase()))
   )
-  const mutualDetails = [
+  const sharedDepartment = Boolean(
     viewerProfile?.department && viewerProfile.department === profile.department
-      ? `Both study ${profile.department}`
-      : null,
-    viewerProfile?.year && viewerProfile.year === profile.year
-      ? `Both are in ${profile.year} year`
-      : null,
+  )
+  const sharedYear = Boolean(viewerProfile?.year && viewerProfile.year === profile.year)
+  const sharedFoodPreference = Boolean(
     viewerProfile?.food_preference
       && profile.food_preference
       && viewerProfile.food_preference === profile.food_preference
-      ? `Same food preference: ${formatHabit(profile.food_preference)}`
-      : null,
-  ].filter(Boolean) as string[]
+  )
+  const sharedDrinkingHabit = Boolean(
+    viewerProfile?.drinking_habit
+      && profile.drinking_habit
+      && viewerProfile.drinking_habit === profile.drinking_habit
+  )
+  const sharedSmokingHabit = Boolean(
+    viewerProfile?.smoking_habit
+      && profile.smoking_habit
+      && viewerProfile.smoking_habit === profile.smoking_habit
+  )
 
   return (
     <article
@@ -160,16 +166,6 @@ export function ProfilePostCard({
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col justify-start gap-4 px-3 py-5 sm:px-5 sm:py-6">
-
-          {mutualDetails.length > 0 && (
-            <div>
-              <p className="text-[15px] font-bold uppercase tracking-wide text-muted-foreground">In common</p>
-              <p className="mt-2 text-[13px] font-semibold leading-relaxed text-primary">
-                {mutualDetails.join(" / ")}
-              </p>
-            </div>
-          )}
-
           <div>
             <p className="text-[15px] font-bold uppercase tracking-wide text-muted-foreground">About</p>
             <p className="mt-2 line-clamp-3 text-[13px] font-normal leading-relaxed text-foreground">
@@ -180,21 +176,30 @@ export function ProfilePostCard({
           <div>
             <p className="text-[15px] font-bold uppercase tracking-wide text-muted-foreground">Academics</p>
             <p className="mt-2 text-[13px] font-normal leading-relaxed text-foreground">
-              {profile.department} / {profile.year} Year
+              <span className={sharedDepartment ? "font-semibold text-primary" : undefined}>
+                {profile.department}
+              </span>
+              {" / "}
+              <span className={sharedYear ? "font-semibold text-primary" : undefined}>
+                {profile.year} Year
+              </span>
             </p>
           </div>
 
           <div>
             <p className="text-[15px] font-bold uppercase tracking-wide text-muted-foreground">Food & habits</p>
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] font-normal leading-relaxed text-foreground">
-              <span>Food: {formatHabit(profile.food_preference)}</span>
-              <span className="inline-flex items-center gap-1.5" title="Drinking">
-                <Wine className="size-4 text-muted-foreground" aria-hidden="true" />
+              <span className={`inline-flex items-center gap-1.5 ${sharedFoodPreference ? "font-semibold text-primary" : ""}`}>
+                <Utensils className={`size-4 ${sharedFoodPreference ? "text-primary" : "text-muted-foreground"}`} aria-hidden="true" />
+                Food: {formatHabit(profile.food_preference)}
+              </span>
+              <span className={`inline-flex items-center gap-1.5 ${sharedDrinkingHabit ? "font-semibold text-primary" : ""}`} title="Drinking">
+                <Wine className={`size-4 ${sharedDrinkingHabit ? "text-primary" : "text-muted-foreground"}`} aria-hidden="true" />
                 <span className="sr-only">Drinking:</span>
                 {formatHabit(profile.drinking_habit)}
               </span>
-              <span className="inline-flex items-center gap-1.5" title="Smoking">
-                <Cigarette className="size-4 text-muted-foreground" aria-hidden="true" />
+              <span className={`inline-flex items-center gap-1.5 ${sharedSmokingHabit ? "font-semibold text-primary" : ""}`} title="Smoking">
+                <Cigarette className={`size-4 ${sharedSmokingHabit ? "text-primary" : "text-muted-foreground"}`} aria-hidden="true" />
                 <span className="sr-only">Smoking:</span>
                 {formatHabit(profile.smoking_habit)}
               </span>

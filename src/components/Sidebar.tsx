@@ -8,6 +8,7 @@ import { createClient } from "@/lib/client"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat"
+import { ThemeToggle } from "@/components/ThemeToggle"
 
 type UserProfile = {
   real_name: string
@@ -229,6 +230,7 @@ export function Sidebar() {
                 <Settings className="mr-3 h-[18px] w-[18px] flex-shrink-0" aria-hidden="true" />
                 <span className="tracking-wide">Settings</span>
               </Link>
+              <ThemeToggle />
               <button
                 onClick={handleLogout}
                 className="group flex w-full items-center rounded-lg px-3 py-2.5 text-sm font-medium text-black/80 transition-all duration-200 hover:bg-black/10 hover:text-black"

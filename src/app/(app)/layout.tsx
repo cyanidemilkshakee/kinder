@@ -1,7 +1,5 @@
-/* eslint-disable */
 "use client"
 
-import { usePathname } from "next/navigation"
 import { Sidebar } from "@/components/Sidebar"
 import { InteractiveBackground } from "@/components/InteractiveBackground"
 
@@ -10,22 +8,11 @@ export default function AppLayout({
 }: {
   children: React.ReactNode
 }) {
-  const pathname = usePathname()
-
-  // Determine variant based on path
-  let variant: "home" | "chat" | "likes" | "profile" | "confessions" | "default" = "default"
-  
-  if (pathname.startsWith("/discover")) variant = "home"
-  else if (pathname.startsWith("/chat")) variant = "chat"
-  else if (pathname.startsWith("/likes")) variant = "likes"
-  else if (pathname.startsWith("/profile")) variant = "profile"
-  else if (pathname.startsWith("/confessions")) variant = "confessions"
-
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Background is placed at the absolute lowest layer */}
       <div className="fixed inset-0 z-0">
-        <InteractiveBackground variant={variant as any} />
+        <InteractiveBackground />
       </div>
       
       {/* App content layered above background */}

@@ -315,7 +315,7 @@ export default function LikesPage() {
             <p className="text-sm text-muted-foreground">{likers.length} total pending likes</p>
           </div>
 
-          <div className="mx-auto grid w-full grid-cols-2 rounded-lg border bg-muted/35 p-1 lg:w-3/4">
+          <div className="mx-auto grid w-full grid-cols-2 rounded-lg border bg-background/95 p-1 backdrop-blur lg:w-3/4">
             {RELATIONSHIP_INTENTS.map((intent) => {
               const count = groupedLikers[intent.value].length
               return (
@@ -328,8 +328,8 @@ export default function LikesPage() {
                   }}
                   className={`flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition ${
                     activeIntent === intent.value
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   }`}
                 >
                   {formatRelationshipIntent(intent.value)}

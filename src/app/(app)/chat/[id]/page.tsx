@@ -3,7 +3,7 @@
 
 import { Fragment, use, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Bell, BellOff, LogOut } from "lucide-react"
+import { Ban, Volume2, VolumeX } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ProfilePostCard, type PostProfile } from "@/components/ProfilePostCard"
 import { createClient } from "@/lib/client"
@@ -761,23 +761,25 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           <Button
             type="button"
             variant="ghost"
-            size="icon-sm"
+            size="icon"
+            className="size-10 rounded-full [&_svg]:size-5"
             onClick={() => void toggleMute()}
             disabled={safetyBusy}
             aria-label={muted ? "Unmute conversation" : "Mute conversation"}
             title={muted ? "Unmute conversation" : "Mute conversation"}
           >
-            {muted ? <BellOff /> : <Bell />}
+            {muted ? <VolumeX /> : <Volume2 />}
           </Button>
           <Button
             type="button"
             variant="destructive"
-            size="icon-sm"
+            size="icon"
+            className="size-10 rounded-full [&_svg]:size-5"
             onClick={() => setEndConversationOpen(true)}
             aria-label="End conversation"
             title="End conversation"
           >
-            <LogOut />
+            <Ban />
           </Button>
         </div>
       </header>

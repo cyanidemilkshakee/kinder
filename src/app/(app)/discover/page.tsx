@@ -367,7 +367,7 @@ export default function DiscoverPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden p-4 sm:p-6">
-      <div className="sticky top-0 z-20 -mx-4 bg-background/95 px-4 pb-3 backdrop-blur sm:-mx-6 sm:px-6">
+      <div className="flex-shrink-0 pb-3">
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between gap-3">
             <h1 className="text-2xl font-extrabold tracking-tight">Discover</h1>
@@ -377,7 +377,7 @@ export default function DiscoverPage() {
             </div>
           </div>
 
-          <div className="mx-auto grid w-full grid-cols-2 rounded-lg border bg-muted/35 p-1 lg:w-3/4">
+          <div className="mx-auto grid w-full grid-cols-2 rounded-lg border bg-background/95 p-1 backdrop-blur lg:w-3/4">
             {RELATIONSHIP_INTENTS.map((intent) => {
               const count = groupedProfiles[intent.value].length
               return (
@@ -390,8 +390,8 @@ export default function DiscoverPage() {
                   }}
                   className={`flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition ${
                     activeIntent === intent.value
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   }`}
                 >
                   {formatRelationshipIntent(intent.value)}
