@@ -2,6 +2,7 @@
 "use client"
 
 import { useMemo, useRef, useState } from "react"
+import { Pencil, Reply, SmilePlus, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
   REACTION_OPTIONS,
@@ -37,7 +38,6 @@ export function MessageBubble({
   onDelete,
 }: MessageBubbleProps) {
   const isMe = message.sender_id === currentUserId
-  const [actionsOpen, setActionsOpen] = useState(false)
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false)
   const [editing, setEditing] = useState(false)
   const [editDraft, setEditDraft] = useState(message.content)
@@ -91,7 +91,6 @@ export function MessageBubble({
     setPending(false)
     if (deleted) {
       setConfirmDelete(false)
-      setActionsOpen(false)
     }
   }
 
@@ -107,7 +106,6 @@ export function MessageBubble({
     } else if (isMe && event.key === "Delete") {
       event.preventDefault()
       setConfirmDelete(true)
-      setActionsOpen(true)
     }
   }
 
@@ -192,7 +190,84 @@ export function MessageBubble({
           </div>
         )}
 
-        <div className={cn("flex min-w-0 flex-col", isMe ? "items-end" : "items-start")}>
+        <div className={cn("relative flex min-w-0 flex-col", isMe ? "items-end" : "items-start")}>
+          {!message.deleted_at ? (
+            <div
+              className={cn(
+                "absolute -top-9 z-10 flex items-center gap-0.5 rounded-md border bg-background p-0.5 opacity-0 shadow-md transition-opacity group-hover:opacity-100 group-focus-within:opacity-100",
+                isMe ? "right-0" : "left-0"
+              )}
+              aria-label="Message tools"
+            >
+              <button
+                type="button"
+                onClick={() => onReply(message)}
+                className="flex size-7 items-center justify-center rounded hover:bg-muted"
+                aria-label="Reply"
+                title="Reply"
+              >
+                <Reply className="size-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setReactionPickerOpen((open) => !open)}
+                className="flex size-7 items-center justify-center rounded hover:bg-muted"
+                aria-label="React"
+                title="React"
+                aria-expanded={reactionPickerOpen}
+              >
+                <SmilePlus className="size-3.5" />
+              </button>
+              {isMe ? (
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  className="flex size-7 items-center justify-center rounded hover:bg-muted"
+                  aria-label="Edit"
+                  title="Edit"
+                >
+                  <Pencil className="size-3.5" />
+                </button>
+              ) : null}
+              {isMe ? (
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(true)}
+                  className="flex size-7 items-center justify-center rounded text-destructive hover:bg-destructive/10"
+                  aria-label="Delete"
+                  title="Delete"
+                >
+                  <Trash2 className="size-3.5" />
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
+          {reactionPickerOpen && !message.deleted_at ? (
+            <div
+              className={cn(
+                "absolute -top-[4.75rem] z-20 flex gap-1 rounded-full border bg-background p-1 shadow-md",
+                isMe ? "right-0" : "left-0"
+              )}
+              aria-label="Choose a reaction"
+            >
+              {REACTION_OPTIONS.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={async () => {
+                    await onReact(message, emoji)
+                    setReactionPickerOpen(false)
+                  }}
+                  className="flex size-8 items-center justify-center rounded-full text-base hover:bg-muted"
+                  aria-label={`React with ${emoji}`}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
           <div
             className={cn(
               "min-w-0 rounded-2xl px-3 py-2 text-sm shadow-sm transition-opacity",
@@ -283,75 +358,7 @@ export function MessageBubble({
           <div className="mt-1 flex max-w-full items-center gap-3 px-1 text-[10px] text-muted-foreground">
             <span>{time}{message.edited_at && !message.deleted_at ? " - Edited" : ""}</span>
             {isMe ? <span>{receipt}</span> : null}
-
-            {!message.deleted_at ? (
-              <button
-                type="button"
-                onClick={() => setActionsOpen((open) => !open)}
-                className="font-bold opacity-70 hover:text-foreground focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
-                aria-expanded={actionsOpen}
-              >
-                Actions
-              </button>
-            ) : null}
           </div>
-
-          {actionsOpen && !message.deleted_at ? (
-            <div className="mt-1 flex flex-wrap justify-end gap-3 rounded-md border bg-background px-2 py-1.5 text-xs shadow-sm">
-              <button type="button" onClick={() => onReply(message)} className="font-bold hover:text-primary">
-                Reply
-              </button>
-              <button
-                type="button"
-                onClick={() => setReactionPickerOpen((open) => !open)}
-                className="font-bold hover:text-primary"
-                aria-expanded={reactionPickerOpen}
-              >
-                React
-              </button>
-              {isMe ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditing(true)
-                    setActionsOpen(false)
-                  }}
-                  className="font-bold hover:text-primary"
-                >
-                  Edit
-                </button>
-              ) : null}
-              {isMe ? (
-                <button
-                  type="button"
-                  onClick={() => setConfirmDelete(true)}
-                  className="font-bold text-destructive"
-                >
-                  Delete
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-
-          {reactionPickerOpen && !message.deleted_at ? (
-            <div className="mt-1 flex gap-1 rounded-full border bg-background p-1 shadow-sm" aria-label="Choose a reaction">
-              {REACTION_OPTIONS.map((emoji) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  onClick={async () => {
-                    await onReact(message, emoji)
-                    setReactionPickerOpen(false)
-                    setActionsOpen(false)
-                  }}
-                  className="flex size-8 items-center justify-center rounded-full text-base hover:bg-muted"
-                  aria-label={`React with ${emoji}`}
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
-          ) : null}
 
           {confirmDelete ? (
             <div className="mt-1 flex items-center gap-2 rounded-md border border-destructive/30 bg-background px-2 py-1.5 text-xs">

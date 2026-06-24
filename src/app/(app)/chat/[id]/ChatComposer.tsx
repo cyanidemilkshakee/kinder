@@ -1,6 +1,7 @@
 "use client"
 
 import { useRef, useState } from "react"
+import { FileImage, Mic, MicOff, Paperclip, Send, Sparkles, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { Message, MessageType } from "../chat-types"
 
@@ -39,34 +40,35 @@ export function ChatComposer({
   onStopRecording,
   onCancelRecording,
 }: ChatComposerProps) {
-  const photoInputRef = useRef<HTMLInputElement>(null)
-  const videoInputRef = useRef<HTMLInputElement>(null)
+  const mediaInputRef = useRef<HTMLInputElement>(null)
   const gifInputRef = useRef<HTMLInputElement>(null)
   const [startersOpen, setStartersOpen] = useState(false)
 
-  const handleFile = async (
-    event: React.ChangeEvent<HTMLInputElement>,
-    type: Exclude<MessageType, "text" | "audio">
-  ) => {
+  const handleMedia = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     event.target.value = ""
-    if (file) await onUpload(file, type)
+    if (!file) return
+    await onUpload(file, file.type.startsWith("video/") ? "video" : "image")
+  }
+
+  const handleGif = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ""
+    if (file) await onUpload(file, "gif")
   }
 
   return (
-    <div className="border-t bg-background/95 p-3 backdrop-blur-md sm:p-4">
-      <div className="mx-auto flex max-w-4xl flex-col gap-2">
+    <div className="w-full border-t bg-background/95 p-3 backdrop-blur-md sm:p-4">
+      <div className="flex w-full flex-col gap-2">
         {replyTo ? (
           <div className="flex items-center justify-between gap-3 rounded-md border-l-2 border-primary bg-muted/40 px-3 py-2 text-xs">
             <div className="min-w-0">
               <span className="font-bold">Replying to a message</span>
-              <span className="block truncate text-muted-foreground">
-                {replyTo.content || replyTo.message_type}
-              </span>
+              <span className="block truncate text-muted-foreground">{replyTo.content || replyTo.message_type}</span>
             </div>
-            <button type="button" onClick={onCancelReply} className="font-bold text-muted-foreground hover:text-foreground">
-              Cancel
-            </button>
+            <Button type="button" variant="ghost" size="icon-xs" onClick={onCancelReply} aria-label="Cancel reply" title="Cancel reply">
+              <X />
+            </Button>
           </div>
         ) : null}
 
@@ -90,88 +92,90 @@ export function ChatComposer({
           </div>
         ) : null}
 
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <Button type="button" size="xs" variant="ghost" onClick={() => setStartersOpen((open) => !open)} aria-expanded={startersOpen}>
-            Starters
-          </Button>
-          <Button type="button" size="xs" variant="outline" onClick={() => photoInputRef.current?.click()} disabled={busy || recording}>
-            Photo
-          </Button>
-          <Button type="button" size="xs" variant="outline" onClick={() => videoInputRef.current?.click()} disabled={busy || recording}>
-            Video
-          </Button>
-          <Button type="button" size="xs" variant="outline" onClick={() => gifInputRef.current?.click()} disabled={busy || recording}>
-            GIF
-          </Button>
-          {recording ? (
-            <>
-              <Button type="button" size="xs" variant="destructive" onClick={onStopRecording}>
-                Stop {recordingSeconds}s
-              </Button>
-              <Button type="button" size="xs" variant="ghost" onClick={onCancelRecording}>
-                Cancel recording
-              </Button>
-            </>
-          ) : (
-            <Button type="button" size="xs" variant="outline" onClick={() => void onStartRecording()} disabled={busy}>
-              Voice
-            </Button>
-          )}
-
-          <input
-            ref={photoInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            onChange={(event) => void handleFile(event, "image")}
-            className="sr-only"
-            aria-label="Upload a photo"
-          />
-          <input
-            ref={videoInputRef}
-            type="file"
-            accept="video/mp4,video/webm,video/quicktime"
-            onChange={(event) => void handleFile(event, "video")}
-            className="sr-only"
-            aria-label="Upload a video"
-          />
-          <input
-            ref={gifInputRef}
-            type="file"
-            accept="image/gif"
-            onChange={(event) => void handleFile(event, "gif")}
-            className="sr-only"
-            aria-label="Upload a GIF"
-          />
-        </div>
-
         <form
           onSubmit={(event) => {
             event.preventDefault()
             void onSend()
           }}
-          className="flex items-end gap-2"
+          className="flex w-full items-end gap-2"
         >
-          <label htmlFor="chat-message" className="sr-only">Message {otherUserName}</label>
-          <textarea
-            id="chat-message"
-            value={value}
-            onChange={(event) => onChange(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Escape" && replyTo) onCancelReply()
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault()
-                if (value.trim() && !busy) void onSend()
-              }
-            }}
-            placeholder={`Message ${otherUserName}...`}
-            rows={1}
-            className="max-h-32 min-h-10 flex-1 resize-y rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-1 focus:ring-primary/50"
-            autoComplete="off"
-            disabled={recording}
-          />
-          <Button type="submit" className="h-10 px-4" disabled={!value.trim() || busy || recording}>
-            Send
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => setStartersOpen((open) => !open)}
+            aria-label="Conversation starters"
+            title="Conversation starters"
+            aria-expanded={startersOpen}
+          >
+            <Sparkles />
           </Button>
+
+          <div className="relative min-w-0 flex-1">
+            <label htmlFor="chat-message" className="sr-only">Message {otherUserName}</label>
+            <textarea
+              id="chat-message"
+              value={value}
+              onChange={(event) => onChange(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape" && replyTo) onCancelReply()
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault()
+                  if (value.trim() && !busy) void onSend()
+                }
+              }}
+              placeholder="Send message..."
+              rows={1}
+              className="max-h-32 min-h-11 w-full resize-y rounded-lg border border-input bg-background py-2.5 pl-3 pr-40 text-sm outline-none transition focus:border-primary focus:ring-1 focus:ring-primary/50"
+              autoComplete="off"
+              disabled={recording}
+            />
+
+            <div className="absolute bottom-1.5 right-1.5 flex items-center gap-0.5">
+              {recording ? (
+                <>
+                  <span className="px-1 text-[10px] font-bold text-destructive" aria-live="polite">{recordingSeconds}s</span>
+                  <Button type="button" variant="ghost" size="icon-sm" onClick={onCancelRecording} aria-label="Cancel voice note" title="Cancel voice note">
+                    <X />
+                  </Button>
+                  <Button type="button" variant="destructive" size="icon-sm" onClick={onStopRecording} aria-label="Stop and send voice note" title="Stop and send voice note">
+                    <MicOff />
+                  </Button>
+                </>
+              ) : (
+                <Button type="button" variant="ghost" size="icon-sm" onClick={() => void onStartRecording()} disabled={busy} aria-label="Record voice note" title="Record voice note">
+                  <Mic />
+                </Button>
+              )}
+
+              <Button type="button" variant="ghost" size="icon-sm" onClick={() => mediaInputRef.current?.click()} disabled={busy || recording} aria-label="Add photo or video" title="Media">
+                <Paperclip />
+              </Button>
+              <Button type="button" variant="ghost" size="icon-sm" onClick={() => gifInputRef.current?.click()} disabled={busy || recording} aria-label="Add GIF" title="GIF">
+                <FileImage />
+              </Button>
+              <Button type="submit" size="icon-sm" disabled={!value.trim() || busy || recording} aria-label="Send message" title="Send message">
+                <Send />
+              </Button>
+            </div>
+          </div>
+
+          <input
+            ref={mediaInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime"
+            onChange={(event) => void handleMedia(event)}
+            className="sr-only"
+            aria-label="Upload a photo or video"
+          />
+          <input
+            ref={gifInputRef}
+            type="file"
+            accept="image/gif"
+            onChange={(event) => void handleGif(event)}
+            className="sr-only"
+            aria-label="Upload a GIF"
+          />
         </form>
         <p className="sr-only" aria-live="polite">
           Press Enter to send, Shift Enter for a new line, and Escape to cancel a reply.

@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/client"
 import { Button } from "@/components/ui/button"
+import { ThemeToggle } from "@/components/ThemeToggle"
 import {
   Loader2, AlertTriangle, Shield,
   EyeOff, Eye, Trash2, KeyRound, Lock, Tags, BookOpen, GraduationCap
@@ -186,6 +187,10 @@ export default function SettingsPage() {
 
   return (
     <div className="flex flex-col h-full min-h-0 overflow-y-auto">
+      <div className="sticky top-0 z-30 flex w-full items-center justify-end gap-3 border-b border-border/60 bg-background/90 px-6 py-3 backdrop-blur-md md:px-12">
+        <span className="text-xs font-bold uppercase text-muted-foreground">Theme</span>
+        <ThemeToggle />
+      </div>
       <div className="flex-1 p-6 md:p-12">
         <div className="w-full max-w-2xl text-left space-y-5">
 

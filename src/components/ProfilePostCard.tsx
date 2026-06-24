@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 "use client"
 
-import { ChevronLeft, ChevronRight, Star } from "lucide-react"
+import { ChevronLeft, ChevronRight, Cigarette, Star, Wine } from "lucide-react"
 import {
   formatHabit,
 } from "@/lib/profile-options"
@@ -70,6 +70,10 @@ export function ProfilePostCard({
   )
   const sharedInterests = (profile.interest_tags || []).filter((interest) =>
     viewerInterests.has(interest.toLowerCase())
+  )
+  const sharedInterestKeys = new Set(sharedInterests.map((interest) => interest.toLowerCase()))
+  const orderedInterests = [...(profile.interest_tags || [])].sort((a, b) =>
+    Number(sharedInterestKeys.has(b.toLowerCase())) - Number(sharedInterestKeys.has(a.toLowerCase()))
   )
   const mutualDetails = [
     viewerProfile?.department && viewerProfile.department === profile.department
@@ -146,11 +150,6 @@ export function ProfilePostCard({
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-sm font-bold leading-tight sm:text-base">{profile.real_name}</h2>
             <p className="truncate text-xs text-muted-foreground sm:text-sm">@{profile.username}</p>
-            {viewerProfile && (sharedInterests.length > 0 || mutualDetails.length > 0) && (
-              <p className="mt-1 line-clamp-2 text-[10px] font-semibold leading-snug text-primary sm:text-xs">
-                Shared: {[...sharedInterests.slice(0, 3), ...mutualDetails].join(" / ")}
-              </p>
-            )}
           </div>
           {profile.isSuperLike && (
             <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
@@ -161,6 +160,15 @@ export function ProfilePostCard({
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col justify-start gap-4 px-3 py-5 sm:px-5 sm:py-6">
+
+          {mutualDetails.length > 0 && (
+            <div>
+              <p className="text-[15px] font-bold uppercase tracking-wide text-muted-foreground">In common</p>
+              <p className="mt-2 text-[13px] font-semibold leading-relaxed text-primary">
+                {mutualDetails.join(" / ")}
+              </p>
+            </div>
+          )}
 
           <div>
             <p className="text-[15px] font-bold uppercase tracking-wide text-muted-foreground">About</p>
@@ -178,17 +186,34 @@ export function ProfilePostCard({
 
           <div>
             <p className="text-[15px] font-bold uppercase tracking-wide text-muted-foreground">Food & habits</p>
-            <p className="mt-2 line-clamp-3 text-[13px] font-normal leading-relaxed text-foreground">
-              Food: {formatHabit(profile.food_preference)} / Drinking: {formatHabit(profile.drinking_habit)} / Smoking: {formatHabit(profile.smoking_habit)}
-            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] font-normal leading-relaxed text-foreground">
+              <span>Food: {formatHabit(profile.food_preference)}</span>
+              <span className="inline-flex items-center gap-1.5" title="Drinking">
+                <Wine className="size-4 text-muted-foreground" aria-hidden="true" />
+                <span className="sr-only">Drinking:</span>
+                {formatHabit(profile.drinking_habit)}
+              </span>
+              <span className="inline-flex items-center gap-1.5" title="Smoking">
+                <Cigarette className="size-4 text-muted-foreground" aria-hidden="true" />
+                <span className="sr-only">Smoking:</span>
+                {formatHabit(profile.smoking_habit)}
+              </span>
+            </div>
           </div>
 
-          {profile.interest_tags && profile.interest_tags.length > 0 && (
+          {orderedInterests.length > 0 && (
             <div>
               <p className="text-[15px] font-bold uppercase tracking-wide text-muted-foreground">Interests</p>
               <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
-                {profile.interest_tags.slice(0, 8).map((tag) => (
-                  <span key={tag} className="text-[13px] font-normal leading-relaxed text-foreground">
+                {orderedInterests.slice(0, 8).map((tag) => (
+                  <span
+                    key={tag}
+                    className={`text-[13px] leading-relaxed ${
+                      sharedInterestKeys.has(tag.toLowerCase())
+                        ? "font-semibold text-primary"
+                        : "font-normal text-foreground"
+                    }`}
+                  >
                     {tag.charAt(0).toUpperCase() + tag.slice(1).toLowerCase()}
                   </span>
                 ))}

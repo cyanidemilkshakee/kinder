@@ -3,7 +3,6 @@
 
 import { usePathname } from "next/navigation"
 import { Sidebar } from "@/components/Sidebar"
-import { ThemeToggle } from "@/components/ThemeToggle"
 import { InteractiveBackground } from "@/components/InteractiveBackground"
 
 export default function AppLayout({
@@ -35,11 +34,6 @@ export default function AppLayout({
         <main className="flex-1 overflow-hidden">
           {children}
         </main>
-      </div>
-
-      {/* Floating theme toggle */}
-      <div className="fixed bottom-4 right-4 z-50">
-        <ThemeToggle />
       </div>
     </div>
   )

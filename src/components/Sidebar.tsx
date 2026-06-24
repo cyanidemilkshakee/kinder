@@ -244,9 +244,9 @@ export function Sidebar() {
             type="button"
             onClick={() => setProfileMenuOpen((open) => !open)}
             aria-expanded={profileMenuOpen}
-            className="flex w-full items-center gap-3 rounded-xl border border-sidebar-border/50 bg-sidebar-accent/50 px-3 py-2.5 text-left backdrop-blur-sm transition-all duration-200 hover:bg-sidebar-accent/70"
+            className="flex w-full items-center gap-3 rounded-xl border border-sidebar-border/50 bg-sidebar-accent/50 px-3 py-3 text-left backdrop-blur-sm transition-all duration-200 hover:bg-sidebar-accent/70"
           >
-            <div className="h-8 w-8 rounded-full overflow-hidden border-2 border-sidebar-primary/30 bg-sidebar-accent flex-shrink-0 shadow-sm">
+            <div className="size-10 flex-shrink-0 overflow-hidden rounded-full bg-sidebar-accent shadow-sm">
               {avatar ? (
                 <img src={avatar} alt="You" className="h-full w-full object-cover" />
               ) : (
@@ -257,7 +257,7 @@ export function Sidebar() {
             </div>
             <div className="overflow-hidden flex-1 min-w-0">
               <p className="text-xs font-semibold truncate text-sidebar-foreground">{userProfile?.real_name || 'Loading…'}</p>
-              <p className="text-[10px] text-sidebar-foreground/40 font-medium tracking-wide">
+              <p className="text-xs font-medium text-sidebar-foreground/40">
                 {userProfile?.username ? `@${userProfile.username}` : "Set username"}
               </p>
             </div>

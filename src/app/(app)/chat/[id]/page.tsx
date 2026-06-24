@@ -3,6 +3,7 @@
 
 import { Fragment, use, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
+import { Bell, BellOff, LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ProfilePostCard, type PostProfile } from "@/components/ProfilePostCard"
 import { createClient } from "@/lib/client"
@@ -26,16 +27,7 @@ const MAX_IMAGE_SIZE = 10 * 1024 * 1024
 const MAX_VIDEO_SIZE = 25 * 1024 * 1024
 const MAX_AUDIO_SIZE = 15 * 1024 * 1024
 
-const REPORT_REASONS = [
-  "Harassment or threats",
-  "Inappropriate content",
-  "Spam or scam",
-  "Impersonation",
-  "Other",
-]
-
 type RealtimeStatus = "connecting" | "live" | "offline"
-type SafetyAction = "report" | "block" | "unmatch" | null
 type ChatProfile = PostProfile & {
   last_seen_at?: string | null
   read_receipts_enabled?: boolean
@@ -70,9 +62,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [otherUserTyping, setOtherUserTyping] = useState(false)
   const [lastSeenAt, setLastSeenAt] = useState<string | null>(null)
   const [muted, setMuted] = useState(false)
-  const [optionsOpen, setOptionsOpen] = useState(false)
-  const [safetyAction, setSafetyAction] = useState<SafetyAction>(null)
-  const [reportReason, setReportReason] = useState("")
+  const [endConversationOpen, setEndConversationOpen] = useState(false)
   const [safetyBusy, setSafetyBusy] = useState(false)
   const [profileModalOpen, setProfileModalOpen] = useState(false)
   const [activePhotoIndex, setActivePhotoIndex] = useState(0)
@@ -336,16 +326,16 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   }, [messages.length])
 
   useEffect(() => {
-    if (!safetyAction && !profileModalOpen) return
+    if (!endConversationOpen && !profileModalOpen) return
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setSafetyAction(null)
+        setEndConversationOpen(false)
         setProfileModalOpen(false)
       }
     }
     window.addEventListener("keydown", closeOnEscape)
     return () => window.removeEventListener("keydown", closeOnEscape)
-  }, [profileModalOpen, safetyAction])
+  }, [endConversationOpen, profileModalOpen])
 
   useEffect(() => {
     if (!recording) return
@@ -702,7 +692,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       if (!muteError) setMuted(true)
     }
     setSafetyBusy(false)
-    setOptionsOpen(false)
   }
 
   const endConversation = async () => {
@@ -723,33 +712,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     return true
   }
 
-  const runSafetyAction = async () => {
-    if (!currentUserId || !otherUserProfile || !safetyAction) return
+  const confirmEndConversation = async () => {
     setSafetyBusy(true)
-
-    if (safetyAction === "report") {
-      const { error: reportError } = await supabase.from("reports").insert({
-        reporter_id: currentUserId,
-        reported_id: otherUserProfile.id,
-        reason: reportReason,
-      })
-      if (reportError) setError("Report couldn't be submitted.")
-      else {
-        setSafetyAction(null)
-        setReportReason("")
-      }
-    } else if (safetyAction === "block") {
-      const { error: blockError } = await supabase.from("blocks").insert({
-        blocker_id: currentUserId,
-        blocked_id: otherUserProfile.id,
-      })
-      if (blockError) setError("This profile couldn't be blocked.")
-      else await endConversation()
-    } else {
-      await endConversation()
-    }
-
-    setSafetyBusy(false)
+    const ended = await endConversation()
+    if (!ended) setSafetyBusy(false)
   }
 
   const handleNextPhoto = (event: React.MouseEvent) => {
@@ -791,26 +757,28 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           </span>
         </button>
 
-        <div className="relative">
-          <Button type="button" variant="outline" size="sm" onClick={() => setOptionsOpen((open) => !open)} aria-expanded={optionsOpen}>
-            Options
+        <div className="flex items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => void toggleMute()}
+            disabled={safetyBusy}
+            aria-label={muted ? "Unmute conversation" : "Mute conversation"}
+            title={muted ? "Unmute conversation" : "Mute conversation"}
+          >
+            {muted ? <BellOff /> : <Bell />}
           </Button>
-          {optionsOpen ? (
-            <div className="absolute right-0 top-full mt-2 flex w-48 flex-col gap-1 rounded-md border bg-background p-1.5 text-sm shadow-lg">
-              <button type="button" onClick={() => void toggleMute()} disabled={safetyBusy} className="rounded px-3 py-2 text-left hover:bg-muted">
-                {muted ? "Unmute conversation" : "Mute conversation"}
-              </button>
-              <button type="button" onClick={() => { setSafetyAction("report"); setOptionsOpen(false) }} className="rounded px-3 py-2 text-left hover:bg-muted">
-                Report profile
-              </button>
-              <button type="button" onClick={() => { setSafetyAction("block"); setOptionsOpen(false) }} className="rounded px-3 py-2 text-left text-destructive hover:bg-destructive/10">
-                Block profile
-              </button>
-              <button type="button" onClick={() => { setSafetyAction("unmatch"); setOptionsOpen(false) }} className="rounded px-3 py-2 text-left text-destructive hover:bg-destructive/10">
-                End conversation
-              </button>
-            </div>
-          ) : null}
+          <Button
+            type="button"
+            variant="destructive"
+            size="icon-sm"
+            onClick={() => setEndConversationOpen(true)}
+            aria-label="End conversation"
+            title="End conversation"
+          >
+            <LogOut />
+          </Button>
         </div>
       </header>
 
@@ -906,12 +874,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       />
 
       {profileModalOpen && otherUserProfile ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="chat-profile-title">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="chat-profile-title"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setProfileModalOpen(false)
+          }}
+        >
           <div className="relative w-full max-w-4xl xl:max-w-5xl">
             <h2 id="chat-profile-title" className="sr-only">{`${otherUserName}'s profile`}</h2>
-            <button type="button" onClick={() => setProfileModalOpen(false)} className="absolute -top-10 right-0 font-bold text-white">
-              Close
-            </button>
             <ProfilePostCard
               profile={otherUserProfile}
               viewerProfile={currentUserProfile}
@@ -925,47 +898,25 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         </div>
       ) : null}
 
-      {safetyAction ? (
+      {endConversationOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 backdrop-blur-sm sm:items-center" role="dialog" aria-modal="true" aria-labelledby="safety-title">
           <div className="w-full max-w-sm rounded-lg border bg-background p-5 shadow-xl">
-            <h2 id="safety-title" className="text-lg font-bold">
-              {safetyAction === "report" ? `Report ${otherUserName}` : safetyAction === "block" ? `Block ${otherUserName}` : "End conversation"}
-            </h2>
+            <h2 id="safety-title" className="text-lg font-bold">End conversation</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              {safetyAction === "report"
-                ? "Choose the reason that best describes the issue."
-                : safetyAction === "block"
-                  ? "This removes the match and prevents this profile from appearing again."
-                  : "This removes the match and conversation for both people."}
+              This removes the match and conversation for both people.
             </p>
 
-            {safetyAction === "report" ? (
-              <div className="mt-4 flex flex-col gap-2">
-                {REPORT_REASONS.map((reason) => (
-                  <button
-                    key={reason}
-                    type="button"
-                    onClick={() => setReportReason(reason)}
-                    className={`rounded-md border px-3 py-2 text-left text-sm ${reportReason === reason ? "border-primary bg-primary/10" : "hover:bg-muted"}`}
-                    aria-pressed={reportReason === reason}
-                  >
-                    {reason}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-
             <div className="mt-5 flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => { setSafetyAction(null); setReportReason("") }}>
+              <Button type="button" variant="outline" onClick={() => setEndConversationOpen(false)}>
                 Cancel
               </Button>
               <Button
                 type="button"
                 variant="destructive"
-                onClick={() => void runSafetyAction()}
-                disabled={safetyBusy || (safetyAction === "report" && !reportReason)}
+                onClick={() => void confirmEndConversation()}
+                disabled={safetyBusy}
               >
-                {safetyAction === "report" ? "Submit report" : safetyAction === "block" ? "Block" : "End conversation"}
+                End conversation
               </Button>
             </div>
           </div>
