@@ -1,9 +1,10 @@
 /* eslint-disable */
 "use client"
 
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState, useRef, type CSSProperties } from "react"
 import { createClient } from "@/lib/client"
 import { Button } from "@/components/ui/button"
+import { MotionModal } from "@/components/MotionModal"
 import { Loader2 } from "lucide-react"
 import { isValidUsername, normalizeUsername, usernameGuidance } from "@/lib/username"
 import Cropper from "react-easy-crop"
@@ -50,6 +51,7 @@ export default function ProfilePage() {
   // Cropper State
   const [targetPhotoIndex, setTargetPhotoIndex] = useState<number>(-1)
   const [photoToCrop, setPhotoToCrop] = useState<{ url: string; index: number; file: File } | null>(null)
+  const [cropperOpen, setCropperOpen] = useState(false)
   const [crop, setCrop] = useState({ x: 0, y: 0 })
   const [zoom, setZoom] = useState(1)
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
@@ -177,8 +179,17 @@ export default function ProfilePage() {
     if (!e.target.files || e.target.files.length === 0) return
     const file = e.target.files[0]
     const url = URL.createObjectURL(file)
+    setCrop({ x: 0, y: 0 })
+    setZoom(1)
+    setCroppedAreaPixels(null)
     setPhotoToCrop({ url, file, index: targetPhotoIndex })
+    setCropperOpen(true)
     e.target.value = "" // reset
+  }
+
+  const closeCropper = () => {
+    setCropperOpen(false)
+    window.setTimeout(() => setPhotoToCrop(null), 180)
   }
 
   const handleCropSave = async () => {
@@ -219,7 +230,7 @@ export default function ProfilePage() {
       }
 
       showToast("Photo updated successfully!")
-      setPhotoToCrop(null)
+      closeCropper()
     } catch (err: any) {
       showToast(err.message || "Failed to upload", "error")
     } finally {
@@ -266,6 +277,8 @@ export default function ProfilePage() {
   if (!profile) return <div className="p-8 text-center text-muted-foreground">Failed to load profile.</div>
 
   const displayAvatar = profile.avatar_url || `https://api.dicebear.com/9.x/micah/svg?seed=${profile.id}&backgroundColor=ffd700`
+  const zoomProgress = ((zoom - 1) / 2) * 100
+  const zoomSliderStyle = { "--zoom-progress": `${zoomProgress}%` } as CSSProperties
 
   return (
     <div className="flex flex-col h-full min-h-0 overflow-y-auto relative">
@@ -615,13 +628,18 @@ export default function ProfilePage() {
       </div>
 
       {/* Cropper Modal */}
-      {photoToCrop && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-background w-full max-w-lg rounded-2xl overflow-hidden flex flex-col shadow-2xl">
+      <MotionModal
+        open={cropperOpen && !!photoToCrop}
+        className="z-[100] bg-black/80"
+        panelClassName="bg-background w-full max-w-lg rounded-2xl overflow-hidden flex flex-col shadow-2xl"
+        labelledBy="crop-photo-title"
+      >
+        {photoToCrop && (
+          <>
             <div className="p-4 border-b border-border flex justify-between items-center bg-card">
-              <h3 className="font-bold text-lg">Crop Photo</h3>
+              <h3 id="crop-photo-title" className="font-bold text-lg">Crop Photo</h3>
               <button 
-                onClick={() => setPhotoToCrop(null)}
+                onClick={closeCropper}
                 className="p-1 rounded-full hover:bg-muted transition-colors"
                 disabled={uploading}
               >
@@ -634,14 +652,34 @@ export default function ProfilePage() {
                 image={photoToCrop.url}
                 crop={crop}
                 zoom={zoom}
+                minZoom={1}
+                maxZoom={3}
                 aspect={4 / 5}
                 onCropChange={setCrop}
                 onCropComplete={(_, croppedAreaPixels) => setCroppedAreaPixels(croppedAreaPixels)}
                 onZoomChange={setZoom}
               />
             </div>
+            <div className="space-y-2 bg-card px-4 py-4 border-t border-border">
+              <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground">
+                <label htmlFor="crop-zoom">Zoom</label>
+                <span>{zoom.toFixed(1)}x</span>
+              </div>
+              <input
+                id="crop-zoom"
+                type="range"
+                min={1}
+                max={3}
+                step={0.05}
+                value={zoom}
+                onChange={(event) => setZoom(Number(event.target.value))}
+                className="zoom-slider w-full"
+                style={zoomSliderStyle}
+                aria-label="Photo crop zoom"
+              />
+            </div>
             <div className="p-4 flex justify-end gap-3 bg-card border-t border-border">
-              <Button variant="outline" onClick={() => setPhotoToCrop(null)} disabled={uploading}>
+              <Button variant="outline" onClick={closeCropper} disabled={uploading}>
                 Cancel
               </Button>
               <Button onClick={handleCropSave} disabled={uploading}>
@@ -649,9 +687,9 @@ export default function ProfilePage() {
                 Save Photo
               </Button>
             </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </MotionModal>
 
       {/* Toast */}
       {toast && (

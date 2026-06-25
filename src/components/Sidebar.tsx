@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation"
 import { Home, Heart, MessageCircle, User, HeartHandshake, Settings, Info, LogOut, ScrollText, Loader2 } from "lucide-react"
 import { createClient } from "@/lib/client"
 import { useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat"
 import { ThemeToggle } from "@/components/ThemeToggle"
 
@@ -25,6 +25,7 @@ export function Sidebar() {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [unreadChatCount, setUnreadChatCount] = useState(0)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   usePresenceHeartbeat()
 
@@ -102,6 +103,18 @@ export function Sidebar() {
     setProfileMenuOpen(false)
   }, [pathname])
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setProfileMenuOpen(false)
+      }
+    }
+    if (profileMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside)
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [profileMenuOpen])
+
   const upperLinks = [
     { name: "Discover", href: "/discover", icon: Home },
     { name: "Likes", href: "/likes", icon: Heart },
@@ -129,7 +142,7 @@ export function Sidebar() {
 
       {/* App Name */}
       <div className="relative flex h-16 shrink-0 items-center px-5 border-b border-sidebar-border">
-        <Link href="/discover" className="flex items-center gap-2.5 group">
+        <Link href="/" className="flex items-center gap-2.5 group">
           <div className="h-8 w-8 rounded-xl bg-sidebar-primary/20 flex items-center justify-center group-hover:bg-sidebar-primary/30 transition-colors">
             <Heart className="h-4 w-4 text-sidebar-primary fill-sidebar-primary" />
           </div>
@@ -213,7 +226,7 @@ export function Sidebar() {
         </nav>
 
         {/* User info and Menu wrapper */}
-        <div className="relative">
+        <div className="relative" ref={menuRef}>
           {profileMenuOpen && (
             <div className="absolute bottom-full left-0 w-full mb-2 z-50 rounded-xl border border-sidebar-border/60 bg-[#ff9999] p-1.5 backdrop-blur-md shadow-lg animate-in fade-in slide-in-from-bottom-2">
               <Link

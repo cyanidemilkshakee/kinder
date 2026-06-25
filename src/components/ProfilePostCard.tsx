@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 "use client"
 
+import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent, type TouchEvent } from "react"
 import { ChevronLeft, ChevronRight, Cigarette, Star, Utensils, Wine } from "lucide-react"
 import {
   formatHabit,
@@ -33,11 +34,27 @@ type ProfilePostCardProps = {
   avatarUrl: string
   photos: string[]
   activePhotoIndex: number
-  onPrevPhoto: (event: React.MouseEvent) => void
-  onNextPhoto: (event: React.MouseEvent) => void
+  onPrevPhoto: (event: MouseEvent) => void
+  onNextPhoto: (event: MouseEvent) => void
   swipeDirection?: ProfileSwipeDirection | null
-  onTouchStart?: (event: React.TouchEvent) => void
-  onTouchEnd?: (event: React.TouchEvent) => void
+  onTouchStart?: (event: TouchEvent) => void
+  onTouchEnd?: (event: TouchEvent) => void
+  onSwipeCommit?: (direction: ProfileSwipeDirection) => void
+}
+
+type DragPoint = {
+  x: number
+  y: number
+}
+
+const DRAG_THRESHOLD = 92
+const RESIST_AFTER = 130
+
+function resistDrag(value: number) {
+  const sign = Math.sign(value)
+  const abs = Math.abs(value)
+  if (abs <= RESIST_AFTER) return value
+  return sign * (RESIST_AFTER + (abs - RESIST_AFTER) * 0.36)
 }
 
 export function ProfilePostCard({
@@ -51,9 +68,35 @@ export function ProfilePostCard({
   swipeDirection,
   onTouchStart,
   onTouchEnd,
+  onSwipeCommit,
 }: ProfilePostCardProps) {
   const displayPhotos = photos.length > 0 ? photos : [avatarUrl]
   const activePhoto = displayPhotos[Math.min(activePhotoIndex, displayPhotos.length - 1)]
+  const [dragOffset, setDragOffset] = useState<DragPoint>({ x: 0, y: 0 })
+  const [dragging, setDragging] = useState(false)
+  const [photoDirection, setPhotoDirection] = useState<"next" | "prev">("next")
+  const pointerStartRef = useRef<DragPoint | null>(null)
+  const activePointerIdRef = useRef<number | null>(null)
+  const previousPhotoIndexRef = useRef(activePhotoIndex)
+
+  useEffect(() => {
+    pointerStartRef.current = null
+    activePointerIdRef.current = null
+
+    const frame = window.requestAnimationFrame(() => {
+      setDragOffset({ x: 0, y: 0 })
+      setDragging(false)
+    })
+
+    return () => window.cancelAnimationFrame(frame)
+  }, [profile.id])
+
+  useEffect(() => {
+    if (activePhotoIndex === previousPhotoIndexRef.current) return
+    setPhotoDirection(activePhotoIndex > previousPhotoIndexRef.current ? "next" : "prev")
+    previousPhotoIndexRef.current = activePhotoIndex
+  }, [activePhotoIndex])
+
   const swipeClass =
     swipeDirection === "right"
       ? "animate-swipe-right"
@@ -95,17 +138,69 @@ export function ProfilePostCard({
       && viewerProfile.smoking_habit === profile.smoking_habit
   )
 
+  const handlePointerDown = (event: PointerEvent<HTMLElement>) => {
+    if (!onSwipeCommit || swipingPrevented(event.target)) return
+    pointerStartRef.current = { x: event.clientX, y: event.clientY }
+    activePointerIdRef.current = event.pointerId
+    setDragging(true)
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }
+
+  const handlePointerMove = (event: PointerEvent<HTMLElement>) => {
+    if (!onSwipeCommit || !pointerStartRef.current || activePointerIdRef.current !== event.pointerId) return
+    setDragOffset({
+      x: resistDrag(event.clientX - pointerStartRef.current.x),
+      y: resistDrag(event.clientY - pointerStartRef.current.y),
+    })
+  }
+
+  const handlePointerUp = (event: PointerEvent<HTMLElement>) => {
+    if (!onSwipeCommit || !pointerStartRef.current || activePointerIdRef.current !== event.pointerId) return
+
+    const deltaX = event.clientX - pointerStartRef.current.x
+    const deltaY = event.clientY - pointerStartRef.current.y
+    const absX = Math.abs(deltaX)
+    const absY = Math.abs(deltaY)
+    const direction: ProfileSwipeDirection | null =
+      Math.max(absX, absY) < DRAG_THRESHOLD
+        ? null
+        : absX >= absY
+          ? deltaX > 0
+            ? "right"
+            : "left"
+          : deltaY < 0
+            ? "up"
+            : "down"
+
+    pointerStartRef.current = null
+    activePointerIdRef.current = null
+    setDragging(false)
+    setDragOffset({ x: 0, y: 0 })
+
+    if (direction) onSwipeCommit(direction)
+  }
+
+  const dragStyle = {
+    transform: `translate3d(${dragOffset.x}px, ${dragOffset.y}px, 0) rotate(${dragOffset.x / 26}deg) scale(${dragging ? 1.01 : 1})`,
+  } as CSSProperties
+
   return (
     <article
-      className={`mx-auto grid w-full max-w-4xl touch-none grid-cols-[minmax(0,0.98fr)_minmax(145px,0.78fr)] overflow-hidden rounded-lg border bg-background shadow-xl transition-all duration-300 sm:grid-cols-[minmax(0,0.92fr)_minmax(220px,0.78fr)] xl:max-w-5xl ${swipeClass}`}
-      onTouchStart={onTouchStart}
-      onTouchEnd={onTouchEnd}
+      className={`mx-auto grid w-full max-w-4xl touch-none grid-cols-[minmax(0,0.98fr)_minmax(145px,0.78fr)] overflow-hidden rounded-lg border bg-background shadow-xl duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] will-change-transform sm:grid-cols-[minmax(0,0.92fr)_minmax(220px,0.78fr)] xl:max-w-5xl ${dragging ? "cursor-grabbing shadow-2xl transition-[box-shadow]" : "transition-[box-shadow,transform]"} ${onSwipeCommit ? "cursor-grab" : ""} ${swipeClass}`}
+      style={swipeDirection ? undefined : dragStyle}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      onTouchStart={onSwipeCommit ? undefined : onTouchStart}
+      onTouchEnd={onSwipeCommit ? undefined : onTouchEnd}
     >
       <div className="relative aspect-[4/5] min-h-0 bg-muted">
         <img
+          key={`${profile.id}-${activePhotoIndex}-${activePhoto}`}
           src={activePhoto}
           alt={profile.real_name}
-          className="h-full w-full object-cover"
+          className={`h-full w-full object-cover ${photoDirection === "next" ? "animate-photo-slide-next" : "animate-photo-slide-prev"}`}
         />
 
         {displayPhotos.length > 1 && (
@@ -113,7 +208,7 @@ export function ProfilePostCard({
             {displayPhotos.map((_, index) => (
               <span key={index} className="h-0.5 flex-1 overflow-hidden rounded-full bg-white/35">
                 <span
-                  className={`block h-full rounded-full bg-white transition-all duration-300 ${
+                  className={`block h-full rounded-full bg-white transition-all duration-500 ease-out ${
                     index <= activePhotoIndex ? "w-full" : "w-0"
                   }`}
                 />
@@ -229,4 +324,8 @@ export function ProfilePostCard({
       </div>
     </article>
   )
+}
+
+function swipingPrevented(target: EventTarget) {
+  return target instanceof HTMLElement && Boolean(target.closest("button, input, textarea, select, a"))
 }

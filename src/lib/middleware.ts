@@ -45,12 +45,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // If authenticated user visits root (/), redirect to /discover
-  if (user && pathname === '/') {
-    const url = request.nextUrl.clone()
-    url.pathname = '/discover'
-    return NextResponse.redirect(url)
-  }
+
 
   return supabaseResponse
 }

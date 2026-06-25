@@ -5,6 +5,7 @@ import { Fragment, use, useCallback, useEffect, useMemo, useRef, useState } from
 import { useRouter } from "next/navigation"
 import { Ban, Volume2, VolumeX } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { MotionModal } from "@/components/MotionModal"
 import { ProfilePostCard, type PostProfile } from "@/components/ProfilePostCard"
 import { createClient } from "@/lib/client"
 import { ChatComposer } from "./ChatComposer"
@@ -900,9 +901,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         </div>
       ) : null}
 
-      {endConversationOpen ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 backdrop-blur-sm sm:items-center" role="dialog" aria-modal="true" aria-labelledby="safety-title">
-          <div className="w-full max-w-sm rounded-lg border bg-background p-5 shadow-xl">
+      <MotionModal
+        open={endConversationOpen}
+        placement="bottom"
+        className="bg-black/70"
+        panelClassName="w-full max-w-sm rounded-lg border bg-background p-5 shadow-xl"
+        labelledBy="safety-title"
+      >
             <h2 id="safety-title" className="text-lg font-bold">End conversation</h2>
             <p className="mt-2 text-sm text-muted-foreground">
               This removes the match and conversation for both people.
@@ -921,9 +926,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 End conversation
               </Button>
             </div>
-          </div>
-        </div>
-      ) : null}
+      </MotionModal>
     </div>
   )
 }

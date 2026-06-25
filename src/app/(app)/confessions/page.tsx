@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/client"
+import { AnimatedSegmentedControl } from "@/components/AnimatedSegmentedControl"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
@@ -27,6 +28,10 @@ export default function ConfessionsPage() {
   
   const router = useRouter()
   const supabase = createClient()
+  const tabOptions = [
+    { value: "receive" as const, label: "Received" },
+    { value: "send" as const, label: "Send Anonymous" },
+  ]
 
   const showToast = (msg: string, type: "success" | "error" | "info" = "info") => {
     setToast({ msg, type })
@@ -154,28 +159,13 @@ export default function ConfessionsPage() {
         </div>
 
         {/* Tabs */}
-        <div className="sticky top-0 z-20 mx-auto mb-6 flex w-full gap-1 rounded-lg border bg-background/95 p-1 backdrop-blur lg:w-3/4">
-          <button
-            onClick={() => setActiveTab("receive")}
-            className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${
-              activeTab === "receive" 
-                ? "bg-primary text-primary-foreground" 
-                : "text-muted-foreground hover:text-foreground hover:bg-muted"
-            }`}
-          >
-            Received
-          </button>
-          <button
-            onClick={() => setActiveTab("send")}
-            className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${
-              activeTab === "send" 
-                ? "bg-primary text-primary-foreground" 
-                : "text-muted-foreground hover:text-foreground hover:bg-muted"
-            }`}
-          >
-            Send Anonymous
-          </button>
-        </div>
+        <AnimatedSegmentedControl
+          ariaLabel="Confessions tabs"
+          className="sticky top-0 z-20 mx-auto mb-6 w-full lg:w-3/4"
+          options={tabOptions}
+          value={activeTab}
+          onChange={setActiveTab}
+        />
 
         {/* Receive Tab */}
         {activeTab === "receive" && (

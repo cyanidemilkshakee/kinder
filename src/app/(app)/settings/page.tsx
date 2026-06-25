@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/client"
+import { AnimatedSwitch } from "@/components/AnimatedSwitch"
 import { Button } from "@/components/ui/button"
 import {
   Loader2, AlertTriangle, Shield,
@@ -315,13 +316,14 @@ export default function SettingsPage() {
                         : "Your profile is hidden. You will not be shown to new people, but existing matches remain."}
                     </p>
                   </div>
-                  <Button
-                    variant={settings.is_visible ? "outline" : "default"}
-                    className={`rounded-xl flex-shrink-0 ${!settings.is_visible && "bg-primary text-primary-foreground hover:bg-primary/90"}`}
-                    onClick={() => updateSetting('is_visible', !settings.is_visible)}
-                  >
-                    {settings.is_visible ? "Hide Profile" : "Go Visible"}
-                  </Button>
+                  <AnimatedSwitch
+                    checked={settings.is_visible}
+                    onCheckedChange={(checked) => updateSetting("is_visible", checked)}
+                    ariaLabel="Toggle profile visibility"
+                    checkedLabel="Visible"
+                    uncheckedLabel="Hidden"
+                    disabled={saving}
+                  />
                 </div>
 
                 <div className="flex items-start justify-between gap-4 border-t border-border/50 pt-4">
@@ -331,15 +333,14 @@ export default function SettingsPage() {
                       When disabled, people can see that messages were delivered but not when you read them.
                     </p>
                   </div>
-                  <Button
-                    type="button"
-                    variant={settings.read_receipts_enabled ? "default" : "outline"}
-                    className="flex-shrink-0"
-                    onClick={() => updateSetting("read_receipts_enabled", !settings.read_receipts_enabled)}
-                    aria-pressed={settings.read_receipts_enabled}
-                  >
-                    {settings.read_receipts_enabled ? "On" : "Off"}
-                  </Button>
+                  <AnimatedSwitch
+                    checked={settings.read_receipts_enabled}
+                    onCheckedChange={(checked) => updateSetting("read_receipts_enabled", checked)}
+                    ariaLabel="Toggle read receipts"
+                    checkedLabel="On"
+                    uncheckedLabel="Off"
+                    disabled={saving}
+                  />
                 </div>
 
               </section>

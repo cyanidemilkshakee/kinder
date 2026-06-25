@@ -135,18 +135,16 @@ export function ChatComposer({
             />
 
             <div className="absolute inset-y-0 right-2 flex items-center gap-0.5">
-              {recording ? (
-                <>
-                  <span className="px-1 text-[10px] font-bold text-destructive" aria-live="polite">{recordingSeconds}s</span>
-                  <Button type="button" variant="ghost" size="icon" className="size-10 rounded-full [&_svg]:size-5" onClick={onCancelRecording} aria-label="Cancel voice note" title="Cancel voice note">
-                    <X className="size-5" />
-                  </Button>
-                  <Button type="button" variant="destructive" size="icon" className="size-10 rounded-full [&_svg]:size-5" onClick={onStopRecording} aria-label="Stop and send voice note" title="Stop and send voice note">
-                    <MicOff className="size-5" />
-                  </Button>
-                </>
-              ) : (
-                <div className="flex items-center -space-x-1">
+              <div
+                className={`relative h-10 overflow-hidden transition-[width] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] motion-reduce:transition-none ${
+                  recording ? "w-[8.6rem]" : "w-[7.25rem]"
+                }`}
+              >
+                <div
+                  className={`absolute right-0 top-0 flex items-center -space-x-1 transition-all duration-300 ease-out motion-reduce:transition-none ${
+                    recording ? "pointer-events-none translate-y-1 scale-95 opacity-0" : "translate-y-0 scale-100 opacity-100"
+                  }`}
+                >
                   <Button type="button" variant="ghost" size="icon" className="size-10 rounded-full [&_svg]:size-5" onClick={() => void onStartRecording()} disabled={busy} aria-label="Record voice note" title="Record voice note">
                     <Mic className="size-5" />
                   </Button>
@@ -159,8 +157,30 @@ export function ChatComposer({
                     </span>
                   </Button>
                 </div>
-              )}
-              <Button type="submit" size="icon" className="size-10 rounded-full [&_svg]:size-5" disabled={!value.trim() || busy || recording} aria-label="Send message" title="Send message">
+                <div
+                  className={`absolute right-0 top-0 flex items-center gap-0.5 transition-all duration-300 ease-out motion-reduce:transition-none ${
+                    recording ? "translate-y-0 scale-100 opacity-100" : "pointer-events-none -translate-y-1 scale-95 opacity-0"
+                  }`}
+                >
+                  <span className="rounded-full bg-destructive/10 px-2 text-[10px] font-bold text-destructive" aria-live="polite">{recordingSeconds}s</span>
+                  <Button type="button" variant="ghost" size="icon" className="size-10 rounded-full [&_svg]:size-5" onClick={onCancelRecording} aria-label="Cancel voice note" title="Cancel voice note">
+                    <X className="size-5" />
+                  </Button>
+                  <Button type="button" variant="destructive" size="icon" className="size-10 rounded-full [&_svg]:size-5" onClick={onStopRecording} aria-label="Stop and send voice note" title="Stop and send voice note">
+                    <MicOff className="size-5" />
+                  </Button>
+                </div>
+              </div>
+              <Button
+                type="submit"
+                size="icon"
+                className={`size-10 rounded-full transition-all duration-200 [&_svg]:size-5 ${
+                  recording ? "scale-90 opacity-35" : "scale-100 opacity-100"
+                }`}
+                disabled={!value.trim() || busy || recording}
+                aria-label="Send message"
+                title="Send message"
+              >
                 <Send className="size-5" />
               </Button>
             </div>

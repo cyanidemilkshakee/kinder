@@ -4,6 +4,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Flag, Heart, Loader2, Star, X } from "lucide-react"
+import { AnimatedSegmentedControl } from "@/components/AnimatedSegmentedControl"
+import { MotionModal } from "@/components/MotionModal"
 import { ProfilePostCard, type ProfileSwipeDirection } from "@/components/ProfilePostCard"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/client"
@@ -210,6 +212,11 @@ export default function DiscoverPage() {
 
   const activeProfiles = groupedProfiles[activeIntent]
   const current = activeProfiles[0]
+  const intentOptions = RELATIONSHIP_INTENTS.map((intent) => ({
+    value: intent.value,
+    label: formatRelationshipIntent(intent.value),
+    count: groupedProfiles[intent.value].length,
+  }))
 
   const createMatch = async (userId: string, otherProfile: Profile) => {
     const user1_id = userId < otherProfile.id ? userId : otherProfile.id
@@ -277,6 +284,7 @@ export default function DiscoverPage() {
 
   const handleReport = async () => {
     if (!reportReason || !reportModal.targetId || !currentUserId) return
+    const reportedId = reportModal.targetId
     setReportLoading(true)
     const { error } = await supabase.from("reports").insert({
       reporter_id: currentUserId,
@@ -284,14 +292,53 @@ export default function DiscoverPage() {
       reason: reportReason,
     })
     setReportLoading(false)
-    setReportModal({ open: false, targetId: null, targetName: "" })
-    setReportReason("")
+    closeReportModal()
     if (error) {
       showToast("Failed to submit report.", "error")
     } else {
       showToast("Report submitted. Our moderators will review it.", "success")
-      setProfiles((prev) => prev.filter((profile) => profile.id !== reportModal.targetId))
+      setProfiles((prev) => prev.filter((profile) => profile.id !== reportedId))
     }
+  }
+
+  const closeMatchModal = (openChat = false) => {
+    const matchId = matchModal.matchId
+    setMatchModal((prev) => ({ ...prev, open: false }))
+    window.setTimeout(() => {
+      setMatchModal({ open: false, matchedUser: null, matchId: null })
+      if (openChat && matchId) router.push(`/chat/${matchId}`)
+    }, 180)
+  }
+
+  const closeReportModal = () => {
+    setReportModal((prev) => ({ ...prev, open: false }))
+    window.setTimeout(() => {
+      setReportModal({ open: false, targetId: null, targetName: "" })
+      setReportReason("")
+    }, 180)
+  }
+
+  const handleCardSwipeCommit = (direction: ProfileSwipeDirection) => {
+    if (!current) return
+
+    if (direction === "right") {
+      void handleSwipe(true, false, "right")
+      return
+    }
+
+    if (direction === "left") {
+      void handleSwipe(false, false, "left")
+      return
+    }
+
+    if (direction === "up") {
+      if (window.confirm(`Super like ${current.real_name}?`)) {
+        void handleSwipe(true, true, "up")
+      }
+      return
+    }
+
+    setReportModal({ open: true, targetId: current.id, targetName: current.real_name })
   }
 
   const handleNextPhoto = (event: React.MouseEvent) => {
@@ -377,31 +424,16 @@ export default function DiscoverPage() {
             </div>
           </div>
 
-          <div className="mx-auto grid w-full grid-cols-2 rounded-lg border bg-background/95 p-1 backdrop-blur lg:w-3/4">
-            {RELATIONSHIP_INTENTS.map((intent) => {
-              const count = groupedProfiles[intent.value].length
-              return (
-                <button
-                  key={intent.value}
-                  type="button"
-                  onClick={() => {
-                    setActiveIntent(intent.value)
-                    setActivePhotoIndex(0)
-                  }}
-                  className={`flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition ${
-                    activeIntent === intent.value
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                  }`}
-                >
-                  {formatRelationshipIntent(intent.value)}
-                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
-                    {count}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
+          <AnimatedSegmentedControl
+            ariaLabel="Discover relationship intent"
+            className="mx-auto w-full lg:w-3/4"
+            options={intentOptions}
+            value={activeIntent}
+            onChange={(intent) => {
+              setActiveIntent(intent)
+              setActivePhotoIndex(0)
+            }}
+          />
         </div>
       </div>
 
@@ -441,6 +473,7 @@ export default function DiscoverPage() {
                 swipeDirection={swipingId === current.id ? swipeDirection : null}
                 onTouchStart={handleCardTouchStart}
                 onTouchEnd={handleCardTouchEnd}
+                onSwipeCommit={handleCardSwipeCommit}
               />
             </div>
 
@@ -482,9 +515,13 @@ export default function DiscoverPage() {
         )}
       </div>
 
-      {matchModal.open && matchModal.matchedUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-          <div className="animate-match-pop w-full max-w-sm overflow-hidden rounded-lg border bg-background">
+      <MotionModal
+        open={matchModal.open && !!matchModal.matchedUser}
+        className="bg-black/70"
+        panelClassName="w-full max-w-sm overflow-hidden rounded-lg border bg-background"
+      >
+        {matchModal.matchedUser && (
+          <>
             <div className="flex flex-col items-center bg-muted/40 p-8 pb-4">
               <div className="relative">
                 <div className="absolute inset-0 rounded-full bg-primary/30 animate-pulse-ring" />
@@ -506,8 +543,7 @@ export default function DiscoverPage() {
               <Button
                 className="w-full rounded-lg"
                 onClick={() => {
-                  setMatchModal({ open: false, matchedUser: null, matchId: null })
-                  if (matchModal.matchId) router.push(`/chat/${matchModal.matchId}`)
+                  closeMatchModal(true)
                 }}
               >
                 Start Chatting
@@ -515,18 +551,22 @@ export default function DiscoverPage() {
               <Button
                 variant="outline"
                 className="w-full rounded-lg"
-                onClick={() => setMatchModal({ open: false, matchedUser: null, matchId: null })}
+                onClick={() => closeMatchModal()}
               >
                 Keep Swiping
               </Button>
             </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </MotionModal>
 
-      {reportModal.open && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center">
-          <div className="w-full max-w-sm overflow-hidden rounded-lg border bg-background">
+      <MotionModal
+        open={reportModal.open}
+        placement="bottom"
+        className="bg-black/60"
+        panelClassName="w-full max-w-sm overflow-hidden rounded-lg border bg-background"
+      >
+          <div>
             <div className="border-b p-5">
               <h3 className="text-lg font-bold">Report {reportModal.targetName}</h3>
               <p className="mt-1 text-sm text-muted-foreground">Help keep Kinder safe. Select a reason:</p>
@@ -550,10 +590,7 @@ export default function DiscoverPage() {
               <Button
                 variant="outline"
                 className="flex-1 rounded-lg"
-                onClick={() => {
-                  setReportModal({ open: false, targetId: null, targetName: "" })
-                  setReportReason("")
-                }}
+                onClick={closeReportModal}
               >
                 Cancel
               </Button>
@@ -568,8 +605,7 @@ export default function DiscoverPage() {
               </Button>
             </div>
           </div>
-        </div>
-      )}
+      </MotionModal>
 
       {toast && (
         <div className={`fixed bottom-6 left-1/2 z-50 flex max-w-xs -translate-x-1/2 items-center gap-2 rounded-lg border px-5 py-3 text-center text-sm font-medium ${
