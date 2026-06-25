@@ -19,15 +19,15 @@ export function SwitchThumb({ checked, disabled }: SwitchThumbProps) {
   return (
     <span
       aria-hidden="true"
-      className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors duration-200 ${
+      className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-all duration-300 ease-in-out ${
         checked
-          ? "border-primary bg-primary"
+          ? "border-[#34C759] bg-[#34C759]"
           : "border-border bg-muted/60"
       } ${disabled ? "opacity-60" : ""}`}
     >
       <span
-        className={`absolute left-1 size-5 rounded-full bg-background shadow-sm transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] motion-reduce:transition-none ${
-          checked ? "translate-x-5" : "translate-x-0"
+        className={`absolute left-[2px] size-6 rounded-full bg-background shadow-[0_3px_8px_rgba(0,0,0,0.15)] transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1)] motion-reduce:transition-none ${
+          checked ? "translate-x-[20px]" : "translate-x-0"
         }`}
       />
     </span>
