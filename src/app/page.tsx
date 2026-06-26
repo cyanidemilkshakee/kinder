@@ -3,10 +3,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
-import { useTheme } from "next-themes"
 import {
-  Sun,
-  Moon,
   Heart,
   MessageCircle,
   ScrollText,
@@ -24,27 +21,7 @@ import {
 import { createClient } from "@/lib/client"
 import { useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
-
-// ─── Theme Toggle Button ───────────────────────────────────────────
-function ThemeToggleBtn() {
-  const { resolvedTheme, setTheme } = useTheme()
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => setMounted(true), [])
-  if (!mounted) return null
-  const dark = resolvedTheme === "dark"
-  return (
-    <button
-      onClick={() => setTheme(dark ? "light" : "dark")}
-      aria-label="Toggle theme"
-      className="fixed bottom-6 right-6 z-50 flex h-12 w-12 items-center justify-center rounded-full border border-border bg-background/80 backdrop-blur-md shadow-xl transition-all hover:scale-110 hover:shadow-primary/30 hover:border-primary/50"
-    >
-      <span className="relative flex h-5 w-5 items-center justify-center">
-        <Sun className="absolute h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0 text-black" />
-        <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100 text-white" />
-      </span>
-    </button>
-  )
-}
+import { LandingFooter, LandingThemeToggle, LandingTopBar } from "@/components/landing/LandingChrome"
 
 // ─── Floating Particles ────────────────────────────────────────────
 function FloatingParticles() {
@@ -269,52 +246,7 @@ export default function LandingPage() {
       <div className="relative min-h-screen w-full overflow-x-hidden bg-background text-foreground">
 
         {/* ── NAVBAR ─────────────────────────────────────────────── */}
-        <header className="fixed top-0 left-0 right-0 z-40 border-b border-border/30 bg-background/70 backdrop-blur-lg">
-          <div className="flex w-full items-center justify-between px-4 py-4 sm:px-8 lg:px-16">
-            {/* Logo */}
-            <div className="flex items-center gap-2">
-              <span className="text-2xl font-extrabold tracking-tighter text-primary drop-shadow">Kinder</span>
-              <span className="hidden rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-primary sm:inline">
-                Beta
-              </span>
-            </div>
-
-            {/* Nav links (desktop) */}
-            <nav className="hidden items-center gap-6 md:flex">
-              <a href="#features" className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">Features</a>
-              <a href="#how-it-works" className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">How it Works</a>
-              <a href="#safety" className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">Safety</a>
-              <a href="#testimonials" className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">Reviews</a>
-            </nav>
-
-            {/* CTA buttons */}
-            <div className="flex items-center gap-3">
-              {isSignedIn ? (
-                <Link
-                  href="/discover"
-                  className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-md transition-all hover:shadow-primary/30 hover:brightness-105"
-                >
-                  Go to Dashboard
-                </Link>
-              ) : (
-                <>
-                  <Link
-                    href="/auth/login"
-                    className="rounded-xl border border-border/60 bg-background/80 px-4 py-2 text-sm font-semibold text-foreground transition-all hover:border-primary/50 hover:bg-primary/5"
-                  >
-                    Sign In
-                  </Link>
-                  <Link
-                    href="/auth/signup"
-                    className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-md transition-all hover:shadow-primary/30 hover:brightness-105"
-                  >
-                    Sign Up
-                  </Link>
-                </>
-              )}
-            </div>
-          </div>
-        </header>
+        <LandingTopBar isSignedIn={isSignedIn} />
 
         {/* ── HERO SECTION ───────────────────────────────────────── */}
         <section className="relative flex min-h-screen items-center justify-center overflow-hidden pt-20">
@@ -371,6 +303,12 @@ export default function LandingPage() {
                     className="flex items-center gap-2 rounded-2xl border border-border/60 px-8 py-4 text-base font-semibold text-foreground transition-all hover:border-primary/40 hover:bg-primary/5"
                   >
                     Sign In
+                  </Link>
+                  <Link
+                    href="/about"
+                    className="flex items-center gap-2 rounded-2xl border border-border/60 px-8 py-4 text-base font-semibold text-foreground transition-all hover:border-primary/40 hover:bg-primary/5"
+                  >
+                    About Kinder
                   </Link>
                 </>
               )}
@@ -818,31 +756,10 @@ export default function LandingPage() {
         </section>
 
         {/* ── FOOTER ──────────────────────────────────────────────── */}
-        <footer className="border-t border-border/30 bg-muted/20 px-4 py-10 sm:px-8 lg:px-16">
-          <div className="w-full">
-            <div className="flex flex-col items-center justify-between gap-6 sm:flex-row">
-              <div className="text-center sm:text-left">
-                <div className="text-xl font-extrabold tracking-tighter text-primary">Kinder</div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Campus-exclusive social discovery. Made for students, by students.
-                </p>
-              </div>
-              <div className="flex flex-wrap justify-center gap-6 text-xs text-muted-foreground">
-                <a href="#features" className="hover:text-foreground transition-colors">Features</a>
-                <a href="#how-it-works" className="hover:text-foreground transition-colors">How it Works</a>
-                <a href="#safety" className="hover:text-foreground transition-colors">Safety</a>
-                <Link href="/auth/login" className="hover:text-foreground transition-colors">Sign In</Link>
-                <Link href="/auth/signup" className="hover:text-foreground transition-colors">Sign Up</Link>
-              </div>
-            </div>
-            <div className="mt-8 border-t border-border/30 pt-6 text-center text-[11px] text-muted-foreground">
-              © {new Date().getFullYear()} Kinder. An independent, student-built platform. Not affiliated with any college administration.
-            </div>
-          </div>
-        </footer>
+        <LandingFooter />
 
         {/* ── THEME TOGGLE (bottom-right) ─────────────────────────── */}
-        <ThemeToggleBtn />
+        <LandingThemeToggle />
       </div>
     </>
   )

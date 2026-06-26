@@ -3,6 +3,7 @@
 
 import { useState, useEffect, Suspense } from "react"
 import { createClient } from "@/lib/client"
+import { PasswordInput } from "@/components/PasswordInput"
 import { Button } from "@/components/ui/button"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Loader2 } from "lucide-react"
@@ -40,12 +41,16 @@ function AuthForm({ initialView }: { initialView: "login" | "signup" }) {
       if (user) {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('real_name, username')
+          .select('real_name, username, has_password, role')
           .eq('id', user.id)
           .maybeSingle()
 
         if (!profile?.real_name || !profile?.username) {
           router.replace('/onboarding')
+        } else if (!profile.has_password) {
+          router.replace('/settings?setupPassword=1')
+        } else if (profile.role === 'admin') {
+          router.replace('/admin')
         } else {
           router.replace('/discover')
         }
@@ -160,12 +165,16 @@ function AuthForm({ initialView }: { initialView: "login" | "signup" }) {
       } else {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('real_name, username')
+          .select('real_name, username, has_password, role')
           .eq('id', data.user?.id)
           .single()
 
         if (!profile || !profile.real_name || !profile.username) {
           router.push('/onboarding')
+        } else if (!profile.has_password) {
+          router.push('/settings?setupPassword=1')
+        } else if (profile.role === 'admin') {
+          router.push('/admin')
         } else {
           router.push('/discover')
         }
@@ -316,10 +325,9 @@ function AuthForm({ initialView }: { initialView: "login" | "signup" }) {
                     </button>
                   )}
                 </div>
-                <input
+                <PasswordInput
                   id="password"
                   name="password"
-                  type="password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}

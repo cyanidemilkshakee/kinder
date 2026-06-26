@@ -3,10 +3,12 @@
 
 import { useState, useEffect, Suspense } from "react"
 import { createClient } from "@/lib/client"
+import { PasswordInput } from "@/components/PasswordInput"
 import { Button } from "@/components/ui/button"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Loader2 } from "lucide-react"
 import { isValidUsername, normalizeUsername, usernameGuidance } from "@/lib/username"
+import Link from "next/link"
 
 function GoogleIcon() {
   return (
@@ -25,6 +27,7 @@ function AuthForm() {
   const [email, setEmail] = useState("")
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
+  const [acceptedLegal, setAcceptedLegal] = useState(false)
   const [loading, setLoading] = useState(false)
   const [checkingSession, setCheckingSession] = useState(true)
   const [error, setError] = useState("")
@@ -40,12 +43,16 @@ function AuthForm() {
       if (user) {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('real_name, username')
+          .select('real_name, username, has_password, role')
           .eq('id', user.id)
           .maybeSingle()
 
         if (!profile?.real_name || !profile?.username) {
           router.replace('/onboarding')
+        } else if (!profile.has_password) {
+          router.replace('/settings?setupPassword=1')
+        } else if (profile.role === 'admin') {
+          router.replace('/admin')
         } else {
           router.replace('/discover')
         }
@@ -112,6 +119,11 @@ function AuthForm() {
       return
     }
 
+    if (view === "signup" && !acceptedLegal) {
+      setError("Please agree to the Terms & Conditions and Privacy Policy to create an account.")
+      return
+    }
+
     setLoading(true)
 
     if (view === "signup") {
@@ -160,12 +172,16 @@ function AuthForm() {
       } else {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('real_name, username')
+          .select('real_name, username, has_password, role')
           .eq('id', data.user?.id)
           .single()
 
         if (!profile || !profile.real_name || !profile.username) {
           router.push('/onboarding')
+        } else if (!profile.has_password) {
+          router.push('/settings?setupPassword=1')
+        } else if (profile.role === 'admin') {
+          router.push('/admin')
         } else {
           router.push('/discover')
         }
@@ -186,6 +202,11 @@ function AuthForm() {
   }
 
   const handleGoogleLogin = async () => {
+    if (view === "signup" && !acceptedLegal) {
+      setError("Please agree to the Terms & Conditions and Privacy Policy to continue with Google.")
+      return
+    }
+
     setLoading(true)
     await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -310,10 +331,9 @@ function AuthForm() {
                     </button>
                   )}
                 </div>
-                <input
+                <PasswordInput
                   id="password"
                   name="password"
-                  type="password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -323,10 +343,33 @@ function AuthForm() {
               </div>
             )}
 
+            {view === "signup" && (
+              <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border/60 bg-muted/30 p-3 text-left">
+                <input
+                  type="checkbox"
+                  checked={acceptedLegal}
+                  onChange={(e) => setAcceptedLegal(e.target.checked)}
+                  className="mt-0.5 size-4 rounded border-input accent-primary"
+                  required
+                />
+                <span className="text-xs leading-relaxed text-muted-foreground">
+                  I agree to Kinder&apos;s{" "}
+                  <Link href="/terms" className="font-semibold text-primary hover:underline">
+                    Terms &amp; Conditions
+                  </Link>
+                  {" "}and{" "}
+                  <Link href="/privacy" className="font-semibold text-primary hover:underline">
+                    Privacy Policy
+                  </Link>
+                  .
+                </span>
+              </label>
+            )}
+
             <Button
               type="submit"
               className="w-full rounded-xl py-2.5 text-sm font-semibold shadow-md transition-all hover:shadow-lg hover:shadow-primary/20"
-              disabled={loading}
+              disabled={loading || (view === "signup" && !acceptedLegal)}
             >
               {loading ? (
                 <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing…</>
@@ -346,7 +389,7 @@ function AuthForm() {
                 onClick={handleGoogleLogin}
                 variant="outline"
                 className="w-full rounded-xl border-border py-2.5 text-sm font-semibold hover:bg-muted/50 transition-all"
-                disabled={loading}
+                disabled={loading || (view === "signup" && !acceptedLegal)}
               >
                 <GoogleIcon />
                 Continue with Google

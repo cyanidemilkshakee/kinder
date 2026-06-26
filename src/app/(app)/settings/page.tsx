@@ -1,13 +1,15 @@
 /* eslint-disable */
 "use client"
 
-import { useEffect, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { createClient } from "@/lib/client"
 import { AnimatedSwitch } from "@/components/AnimatedSwitch"
+import { PasswordInput } from "@/components/PasswordInput"
 import { Button } from "@/components/ui/button"
+import { useSearchParams } from "next/navigation"
 import {
   Loader2, AlertTriangle, Shield,
-  EyeOff, Eye, Trash2, KeyRound, Lock, Tags, BookOpen, GraduationCap
+  Trash2, KeyRound, Lock
 } from "lucide-react"
 import { DEPARTMENTS, DOESNT_MATTER, INTEREST_TAGS, YEARS } from "@/lib/profile-options"
 
@@ -24,8 +26,9 @@ type ProfileSettings = {
 
 type PreferenceKey = "interested_interests" | "interested_departments" | "interested_years"
 
-export default function SettingsPage() {
+function SettingsContent() {
   const [settings, setSettings] = useState<ProfileSettings | null>(null)
+  const [accountEmail, setAccountEmail] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [passwordSaving, setPasswordSaving] = useState(false)
@@ -36,6 +39,7 @@ export default function SettingsPage() {
   const [confirmPassword, setConfirmPassword] = useState("")
 
   const supabase = createClient()
+  const searchParams = useSearchParams()
 
   const showToast = (msg: string, type: "success" | "error" | "info" = "info") => {
     setToast({ msg, type })
@@ -50,6 +54,7 @@ export default function SettingsPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
+      setAccountEmail(user.email ?? null)
 
       const { data, error } = await supabase
         .from("profiles")
@@ -184,6 +189,7 @@ export default function SettingsPage() {
   }
 
   const isDeletionQueued = !!settings.deletion_queued_at
+  const shouldPromptPasswordSetup = searchParams.get("setupPassword") === "1" && !settings.has_password
 
   return (
     <div className="flex flex-col h-full min-h-0 overflow-y-auto">
@@ -209,6 +215,32 @@ export default function SettingsPage() {
               <section className="space-y-4">
                 <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground border-b border-border/50 pb-2">Account Security</h3>
 
+                <div className={`rounded-xl border px-4 py-3 ${
+                  shouldPromptPasswordSetup
+                    ? "border-primary/50 bg-primary/10"
+                    : "border-border bg-muted/25"
+                }`}>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="font-semibold">Email</span>
+                        <span className="break-all text-muted-foreground">{accountEmail || "Not available"}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="font-semibold">Password</span>
+                        <span className={settings.has_password ? "text-green-600 dark:text-green-400" : "text-primary"}>
+                          {settings.has_password ? "Set" : "Not set"}
+                        </span>
+                      </div>
+                    </div>
+                    {shouldPromptPasswordSetup && (
+                      <p className="max-w-xs text-xs leading-relaxed text-muted-foreground">
+                        Create a password so you can sign in with email too, not just Google.
+                      </p>
+                    )}
+                  </div>
+                </div>
+
                 <div className="grid gap-3 sm:grid-cols-2">
                   <button
                     type="button"
@@ -216,7 +248,7 @@ export default function SettingsPage() {
                     className={`flex items-start gap-3 rounded-xl border px-4 py-3 text-left transition-all duration-200 ${
                       !settings.has_password
                         ? "border-primary bg-primary/10 text-foreground"
-                        : "border-border bg-muted/40 text-muted-foreground opacity-60"
+                      : "border-border bg-muted/40 text-muted-foreground opacity-60"
                     }`}
                   >
                     <KeyRound className="h-5 w-5 flex-shrink-0 text-primary" />
@@ -231,7 +263,7 @@ export default function SettingsPage() {
                     className={`flex items-start gap-3 rounded-xl border px-4 py-3 text-left transition-all duration-200 ${
                       settings.has_password
                         ? "border-primary bg-primary/10 text-foreground"
-                        : "border-border bg-muted/40 text-muted-foreground opacity-60"
+                      : "border-border bg-muted/40 text-muted-foreground opacity-60"
                     }`}
                   >
                     <Lock className="h-5 w-5 flex-shrink-0 text-primary" />
@@ -246,9 +278,8 @@ export default function SettingsPage() {
                   {settings.has_password && (
                     <div className="space-y-1.5">
                       <label htmlFor="current-password" className="text-sm font-semibold">Current Password</label>
-                      <input
+                      <PasswordInput
                         id="current-password"
-                        type="password"
                         value={currentPassword}
                         onChange={(e) => setCurrentPassword(e.target.value)}
                         className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
@@ -259,10 +290,11 @@ export default function SettingsPage() {
 
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1.5">
-                      <label htmlFor="new-password" className="text-sm font-semibold">New Password</label>
-                      <input
+                      <label htmlFor="new-password" className="text-sm font-semibold">
+                        {settings.has_password ? "New Password" : "Create Password"}
+                      </label>
+                      <PasswordInput
                         id="new-password"
-                        type="password"
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                         className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
@@ -272,9 +304,8 @@ export default function SettingsPage() {
                     </div>
                     <div className="space-y-1.5">
                       <label htmlFor="confirm-password" className="text-sm font-semibold">Confirm Password</label>
-                      <input
+                      <PasswordInput
                         id="confirm-password"
-                        type="password"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
@@ -304,10 +335,7 @@ export default function SettingsPage() {
                 {/* Visibility Toggle */}
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      {settings.is_visible
-                        ? <Eye className="h-4 w-4 text-green-500 flex-shrink-0" />
-                        : <EyeOff className="h-4 w-4 text-muted-foreground flex-shrink-0" />}
+                    <div className="mb-1">
                       <h4 className="font-semibold text-sm">Profile Visibility</h4>
                     </div>
                     <p className="text-xs text-muted-foreground leading-relaxed">
@@ -320,8 +348,7 @@ export default function SettingsPage() {
                     checked={settings.is_visible}
                     onCheckedChange={(checked) => updateSetting("is_visible", checked)}
                     ariaLabel="Toggle profile visibility"
-                    checkedLabel="Visible"
-                    uncheckedLabel="Hidden"
+                    showLabel={false}
                     disabled={saving}
                   />
                 </div>
@@ -337,8 +364,7 @@ export default function SettingsPage() {
                     checked={settings.read_receipts_enabled}
                     onCheckedChange={(checked) => updateSetting("read_receipts_enabled", checked)}
                     ariaLabel="Toggle read receipts"
-                    checkedLabel="On"
-                    uncheckedLabel="Off"
+                    showLabel={false}
                     disabled={saving}
                   />
                 </div>
@@ -351,8 +377,7 @@ export default function SettingsPage() {
 
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Tags className="h-4 w-4 text-primary" />
+                    <div>
                       <h4 className="font-semibold text-sm">Interests</h4>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -388,8 +413,7 @@ export default function SettingsPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <BookOpen className="h-4 w-4 text-primary" />
+                    <div>
                       <h4 className="font-semibold text-sm">Branches</h4>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -425,8 +449,7 @@ export default function SettingsPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <GraduationCap className="h-4 w-4 text-primary" />
+                    <div>
                       <h4 className="font-semibold text-sm">Years</h4>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -527,5 +550,19 @@ export default function SettingsPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-full items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      }
+    >
+      <SettingsContent />
+    </Suspense>
   )
 }

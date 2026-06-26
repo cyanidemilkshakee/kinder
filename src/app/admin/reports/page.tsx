@@ -1,138 +1,179 @@
-/* eslint-disable */
 "use client"
 
-import { useEffect, useState } from "react"
-import { createClient } from "@/lib/client"
+import { useCallback, useEffect, useState } from "react"
+import { Ban, Eye, ShieldAlert } from "lucide-react"
+import { AdminPageFrame } from "@/components/admin/AdminPageFrame"
+import { AdminProfileButton } from "@/components/admin/AdminProfileButton"
+import { AdminProfileModal } from "@/components/admin/AdminProfileModal"
 import { Button } from "@/components/ui/button"
-import { Loader2, Ban, ShieldCheck, AlertTriangle } from "lucide-react"
+import { type AdminProfile } from "@/lib/admin-data"
 
-type Report = {
+type AdminReport = {
   id: string
   reason: string
   status: string
   created_at: string
+  reporter: AdminProfile | null
+  reported: AdminProfile | null
   reported_id: string
-  reported: {
-    real_name: string
-    email: string
-    is_suspended: boolean
-    ban_expires_at: string | null
-  }
-  reporter: {
-    real_name: string
-  }
 }
 
 export default function AdminReportsPage() {
-  const [reports, setReports] = useState<Report[]>([])
+  const [reports, setReports] = useState<AdminReport[]>([])
+  const [selectedProfile, setSelectedProfile] = useState<AdminProfile | null>(null)
   const [loading, setLoading] = useState(true)
-  const supabase = createClient()
+  const [error, setError] = useState<string | null>(null)
+  const [busyKey, setBusyKey] = useState<string | null>(null)
 
-  useEffect(() => {
-    fetchReports()
+  const loadReports = useCallback(async () => {
+    const response = await fetch("/api/admin/reports")
+    const payload = await response.json()
+
+    if (!response.ok) {
+      setError(payload.error || "Unable to load reports.")
+      setReports([])
+    } else {
+      setError(null)
+      setReports(payload.reports || [])
+    }
+
+    setLoading(false)
   }, [])
 
-  async function fetchReports() {
-    setLoading(true)
-    const { data } = await supabase
-      .from("reports")
-      .select(`
-        id, reason, status, created_at, reported_id,
-        reported:profiles!reported_id(real_name, email, is_suspended, ban_expires_at),
-        reporter:profiles!reporter_id(real_name)
-      `)
-      .order("created_at", { ascending: false })
-    
-    if (data) setReports(data as unknown as Report[])
-    setLoading(false)
-  }
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadReports()
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [loadReports])
 
-  const markActionTaken = async (reportId: string) => {
-    await supabase.from("reports").update({ status: 'action_taken' }).eq("id", reportId)
-    fetchReports()
-  }
+  const runProfileAction = async (profileId: string, action: "suspend" | "ban" | "visible" | "unsuspend") => {
+    setBusyKey(`${profileId}:${action}`)
+    const response = await fetch(`/api/admin/profiles/${profileId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, days: 7 }),
+    })
+    const payload = await response.json().catch(() => ({}))
 
-  const suspendUser = async (userId: string, reportId: string) => {
-    await supabase.from("profiles").update({ is_suspended: true, ban_expires_at: null }).eq("id", userId)
-    await markActionTaken(reportId)
-  }
+    if (!response.ok) {
+      setError(payload.error || "Unable to update profile.")
+    } else {
+      const updatedProfile = payload.profile as AdminProfile
+      setReports((current) => current.map((report) => (
+        report.reported_id === updatedProfile.id
+          ? { ...report, reported: updatedProfile }
+          : report
+      )))
+      setSelectedProfile((current) => current?.id === updatedProfile.id ? updatedProfile : current)
+    }
 
-  const tempBanUser = async (userId: string, reportId: string) => {
-    const expires = new Date()
-    expires.setDate(expires.getDate() + 7)
-    await supabase.from("profiles").update({ ban_expires_at: expires.toISOString() }).eq("id", userId)
-    await markActionTaken(reportId)
-  }
-
-  const dismissReport = async (reportId: string) => {
-    await supabase.from("reports").update({ status: 'reviewed' }).eq("id", reportId)
-    fetchReports()
+    setBusyKey(null)
   }
 
   return (
-    <div>
-      <h2 className="text-2xl font-bold mb-6">User Reports</h2>
-
-      {loading ? (
-        <div className="flex justify-center p-12">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    <AdminPageFrame
+      title="Reports"
+      description="Review user reports and take quick moderation actions on reported profiles."
+      loading={loading}
+      error={error}
+    >
+      <section className="rounded-[2rem] border border-[#1C1C1C]/10 bg-white/75 p-4 shadow-sm shadow-[#1C1C1C]/5 dark:border-[#F2F2F2]/10 dark:bg-[#F2F2F2]/6">
+        <div className="mb-4">
+          <h2 className="text-lg font-black">All reports</h2>
+          <p className="text-sm opacity-65">{reports.length} total reports</p>
         </div>
-      ) : reports.length === 0 ? (
-        <div className="p-12 text-center text-muted-foreground">
-          No reports found.
-        </div>
-      ) : (
-        <div className="grid gap-4">
-          {reports.map(r => {
-            const isSuspended = r.reported?.is_suspended
-            const isTempBanned = r.reported?.ban_expires_at && new Date(r.reported.ban_expires_at) > new Date()
 
-            return (
-              <div key={r.id} className={`border-b py-5 ${r.status !== 'pending' ? 'opacity-60 border-border/50' : 'border-destructive/30'}`}>
-                <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className={`text-xs font-bold px-2 py-1 rounded-md uppercase tracking-wider ${r.status === 'pending' ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground'}`}>
-                        {r.status}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(r.created_at).toLocaleString()}
-                      </span>
+        {reports.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-[#1C1C1C]/15 p-10 text-center text-sm font-semibold opacity-60 dark:border-[#F2F2F2]/15">
+            No reports to show.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {reports.map((report) => {
+              const isBanned = report.reported?.ban_expires_at && new Date(report.reported.ban_expires_at) > new Date()
+              return (
+                <article key={report.id} className="rounded-2xl border border-[#1C1C1C]/10 bg-white/70 p-4 dark:border-[#F2F2F2]/10 dark:bg-[#F2F2F2]/7">
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                    <div className="min-w-0 flex-1 space-y-3">
+                      <div className="flex flex-wrap items-center gap-2 text-xs font-bold">
+                        <span className="rounded-full bg-[#FF6F3C]/12 px-2.5 py-1 uppercase tracking-wider text-[#CC4C1A] dark:text-[#FF9F75]">
+                          {report.status}
+                        </span>
+                        <span className="opacity-60">{new Date(report.created_at).toLocaleString()}</span>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-black uppercase tracking-wider opacity-50">Reported</span>
+                        <AdminProfileButton profile={report.reported} onClick={setSelectedProfile} />
+                        <span className="text-xs font-black uppercase tracking-wider opacity-50">By</span>
+                        <AdminProfileButton profile={report.reporter} onClick={setSelectedProfile} />
+                      </div>
+
+                      <p className="rounded-2xl border border-[#1C1C1C]/8 bg-[#F2F2F2]/70 p-4 text-sm font-semibold leading-relaxed dark:border-[#F2F2F2]/10 dark:bg-[#1C1C1C]/45">
+                        {report.reason}
+                      </p>
+
+                      <div className="flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-wider">
+                        <span className={`rounded-full px-2 py-1 ${report.reported?.is_visible ? "bg-green-500/10 text-green-600 dark:text-green-300" : "bg-[#1C1C1C]/5 dark:bg-[#F2F2F2]/10"}`}>
+                          {report.reported?.is_visible ? "Visible" : "Hidden"}
+                        </span>
+                        {report.reported?.is_suspended && (
+                          <span className="rounded-full bg-red-500/10 px-2 py-1 text-red-600 dark:text-red-300">Suspended</span>
+                        )}
+                        {isBanned && (
+                          <span className="rounded-full bg-[#FF6F3C]/12 px-2 py-1 text-[#CC4C1A] dark:text-[#FF9F75]">
+                            Banned until {new Date(report.reported!.ban_expires_at!).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
-                    <h4 className="font-semibold text-lg">{r.reported?.real_name} <span className="text-sm font-normal text-muted-foreground">({r.reported?.email})</span></h4>
-                    
-                    <div className="mt-1 mb-3 flex items-center gap-2">
-                      {isSuspended && <span className="text-xs font-semibold text-destructive bg-destructive/10 px-2 py-0.5 rounded">Suspended</span>}
-                      {isTempBanned && <span className="text-xs font-semibold text-orange-500 bg-orange-500/10 px-2 py-0.5 rounded">Temp Banned until {new Date(r.reported.ban_expires_at!).toLocaleDateString()}</span>}
-                    </div>
-
-                    <div className="bg-muted p-3 rounded-xl border border-border/50">
-                      <p className="text-xs text-muted-foreground font-semibold mb-1 uppercase tracking-wider">Reported Reason:</p>
-                      <p className="text-sm font-medium">{r.reason}</p>
-                      <p className="text-xs text-muted-foreground mt-2">Reported by: {r.reporter?.real_name}</p>
-                    </div>
+                    {report.reported && (
+                      <div className="grid gap-2 sm:grid-cols-2 xl:w-64 xl:grid-cols-1">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="destructive"
+                          className="rounded-full"
+                          disabled={busyKey === `${report.reported.id}:suspend`}
+                          onClick={() => runProfileAction(report.reported!.id, "suspend")}
+                        >
+                          <ShieldAlert className="mr-2 size-4" />
+                          Suspend
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="rounded-full bg-[#CC4C1A] text-white hover:bg-[#a53d14]"
+                          disabled={busyKey === `${report.reported.id}:ban`}
+                          onClick={() => runProfileAction(report.reported!.id, "ban")}
+                        >
+                          <Ban className="mr-2 size-4" />
+                          7-day ban
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          className="rounded-full"
+                          disabled={busyKey === `${report.reported.id}:visible`}
+                          onClick={() => runProfileAction(report.reported!.id, "visible")}
+                        >
+                          <Eye className="mr-2 size-4" />
+                          Make visible
+                        </Button>
+                      </div>
+                    )}
                   </div>
+                </article>
+              )
+            })}
+          </div>
+        )}
+      </section>
 
-                  {r.status === 'pending' && (
-                    <div className="flex flex-col gap-2 w-full sm:w-40 flex-shrink-0">
-                      <Button onClick={() => dismissReport(r.id)} variant="outline" className="w-full rounded-xl" size="sm">
-                        <ShieldCheck className="h-4 w-4 mr-2" /> Dismiss
-                      </Button>
-                      <Button onClick={() => tempBanUser(r.reported_id, r.id)} variant="secondary" className="w-full rounded-xl text-orange-500 bg-orange-500/10 hover:bg-orange-500/20" size="sm">
-                        <AlertTriangle className="h-4 w-4 mr-2" /> 7-Day Ban
-                      </Button>
-                      <Button onClick={() => suspendUser(r.reported_id, r.id)} variant="destructive" className="w-full rounded-xl" size="sm">
-                        <Ban className="h-4 w-4 mr-2" /> Suspend
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </div>
+      <AdminProfileModal profile={selectedProfile} onClose={() => setSelectedProfile(null)} />
+    </AdminPageFrame>
   )
 }

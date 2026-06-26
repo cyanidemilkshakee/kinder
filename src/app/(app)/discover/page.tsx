@@ -181,6 +181,7 @@ export default function DiscoverPage() {
       .from("profiles")
       .select("id, username, real_name, department, year, gender, bio, relationship_intent, relationship_intents, avatar_url, photos, interest_tags, food_preference, drinking_habit, smoking_habit")
       .eq("is_visible", true)
+      .neq("role", "admin")
       .limit(30)
 
     if (excludedIds.length > 0) {

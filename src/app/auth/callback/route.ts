@@ -24,12 +24,20 @@ export async function GET(request: Request) {
       if (user) {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('real_name, username')
+          .select('real_name, username, has_password, role')
           .eq('id', user.id)
           .single()
           
         if (!profile || !profile.real_name || !profile.username) {
           return NextResponse.redirect(`${origin}/onboarding`)
+        }
+
+        if (!profile.has_password) {
+          return NextResponse.redirect(`${origin}/settings?setupPassword=1`)
+        }
+
+        if (profile.role === 'admin') {
+          return NextResponse.redirect(`${origin}/admin`)
         }
       }
       return NextResponse.redirect(`${origin}${next}`)

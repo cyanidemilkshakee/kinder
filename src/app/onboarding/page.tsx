@@ -133,6 +133,7 @@ export default function OnboardingPage() {
     }
 
     const normalizedUsername = normalizeUsername(username)
+    const hasAuthPassword = user.user_metadata?.has_password === true
     if (!isValidUsername(normalizedUsername)) {
       setError(usernameGuidance(normalizedUsername) || "Enter a valid username")
       setLoading(false)
@@ -181,7 +182,7 @@ export default function OnboardingPage() {
       avatarUrl = publicUrl
     }
 
-    const { error: profileError } = await supabase
+    const { data: savedProfile, error: profileError } = await supabase
       .from('profiles')
       .upsert({
         id: user.id,
@@ -200,7 +201,10 @@ export default function OnboardingPage() {
         food_preference: foodPreference,
         drinking_habit: drinkingHabit,
         smoking_habit: smokingHabit,
+        has_password: hasAuthPassword,
       })
+      .select("role")
+      .single()
 
     if (profileError) {
       setError(profileError.message)
@@ -208,7 +212,13 @@ export default function OnboardingPage() {
       return
     }
 
-    router.push('/discover')
+    if (!hasAuthPassword) {
+      router.push('/settings?setupPassword=1')
+    } else if (savedProfile?.role === 'admin') {
+      router.push('/admin')
+    } else {
+      router.push('/discover')
+    }
   }
 
   const StepIcon = STEPS[step - 1].icon

@@ -132,6 +132,7 @@ export default function LikesPage() {
       .select("id, username, real_name, department, year, gender, bio, relationship_intent, relationship_intents, avatar_url, photos, interest_tags, food_preference, drinking_habit, smoking_habit")
       .in("id", pendingLikerIds)
       .eq("is_visible", true)
+      .neq("role", "admin")
 
     const enrichedProfiles: Liker[] = (profiles || [])
       .map((profile) => ({

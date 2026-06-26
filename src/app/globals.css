@@ -46,23 +46,23 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* ── LIGHT MODE ── Dusky Rose Petal + Evergreen Shade palette */
+/* ── LIGHT MODE ── Clean neutral palette */
 :root {
-  --background: #FDF7F7;
+  --background: #F9F9F9;
   --foreground: #111111;
   --popover: #FFFFFF;
   --popover-foreground: #111111;
   --primary: #FFD700;           /* Radiant Goldflare */
   --primary-foreground: #1A1A1A;
-  --secondary: #DFA7A8;          /* Dusky Rose Petal */
-  --secondary-foreground: #111111;
-  --muted: #EBC2C3;              /* Dusky Rose Light */
+  --secondary: #F0F0F0;          /* Neutral light grey */
+  --secondary-foreground: #333333;
+  --muted: #EFEFEF;              /* Soft grey */
   --muted-foreground: #666666;   /* Neutral Grey */
-  --accent: #2E4E3F;             /* Evergreen Shade */
-  --accent-foreground: #ffffff;
+  --accent: #F0F0F0;             /* Subtle grey accent */
+  --accent-foreground: #111111;
   --destructive: #e53e3e;
-  --border: #EBC2C3;
-  --input: #EBC2C3;
+  --border: #E2E2E2;
+  --input: #E8E8E8;
   --ring: #FFD700;
   --radius: 0.75rem;
   --chart-1: #FFD700;
@@ -70,7 +70,7 @@
   --chart-3: #2E4E3F;
   --chart-4: #EBC2C3;
   --chart-5: #A46F70;
-  /* Sidebar - Coral Sunset (light) */
+  /* Sidebar - Coral Sunset (light) — unchanged */
   --sidebar: #B23C3C;
   --sidebar-foreground: #ffffff;
   --sidebar-primary: #FFD700;    /* Goldflare - active/primary accent */
@@ -138,6 +138,30 @@
   }
   ::-webkit-scrollbar-thumb:hover {
     background: var(--muted-foreground);
+  }
+
+  /* ── iOS 26 press-down / spring-release for all interactive elements ── */
+  button,
+  a,
+  [role="button"] {
+    /* Release: spring back with a gentle overshoot */
+    transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transform-origin: center;
+  }
+
+  button:active,
+  a:active,
+  [role="button"]:active {
+    /* Press-down: fast snap inward */
+    transform: scale(0.94);
+    transition: transform 0.08s cubic-bezier(0.4, 0, 0.6, 1);
+  }
+
+  /* Disabled elements should not animate */
+  button:disabled,
+  [role="button"][aria-disabled="true"] {
+    transform: none !important;
+    transition: none !important;
   }
 }
 
