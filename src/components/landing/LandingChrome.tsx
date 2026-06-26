@@ -5,7 +5,6 @@ import Link from "next/link"
 import { useEffect, useState } from "react"
 import { Moon, Sun } from "lucide-react"
 import { useTheme } from "next-themes"
-import { createClient } from "@/lib/client"
 
 type LandingTopBarProps = {
   isSignedIn?: boolean
@@ -68,39 +67,6 @@ export function LandingTopBar({ isSignedIn = false }: LandingTopBarProps) {
       </div>
     </header>
   )
-}
-
-export function LandingAuthTopBar() {
-  const [isSignedIn, setIsSignedIn] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-
-    const checkSignedInUser = async () => {
-      try {
-        const supabase = createClient()
-        const {
-          data: { user },
-        } = await supabase.auth.getUser()
-
-        if (!cancelled) {
-          setIsSignedIn(Boolean(user))
-        }
-      } catch (_) {
-        if (!cancelled) {
-          setIsSignedIn(false)
-        }
-      }
-    }
-
-    checkSignedInUser()
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  return <LandingTopBar isSignedIn={isSignedIn} />
 }
 
 export function LandingFooter() {

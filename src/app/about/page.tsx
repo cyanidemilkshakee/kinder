@@ -17,7 +17,8 @@ import {
   Zap,
 } from "lucide-react"
 import Link from "next/link"
-import { LandingAuthTopBar, LandingFooter, LandingThemeToggle } from "@/components/landing/LandingChrome"
+import { LandingFooter, LandingThemeToggle, LandingTopBar } from "@/components/landing/LandingChrome"
+import { createClient } from "@/lib/server"
 
 type IconCard = {
   icon: LucideIcon
@@ -112,7 +113,19 @@ function AboutCard({ icon: Icon, title, body, gradient }: IconCard) {
   )
 }
 
-export default function AboutPage() {
+export default async function AboutPage() {
+  let isSignedIn = false
+
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    isSignedIn = Boolean(user)
+  } catch {
+    isSignedIn = false
+  }
+
   return (
     <>
       <style>{`
@@ -172,7 +185,7 @@ export default function AboutPage() {
       `}</style>
 
       <div className="relative min-h-screen w-full overflow-x-hidden bg-background text-foreground">
-        <LandingAuthTopBar />
+        <LandingTopBar isSignedIn={isSignedIn} />
 
         <section className="relative overflow-hidden px-4 pb-20 pt-32 sm:px-8 lg:px-16">
           <div className="hero-glow pointer-events-none absolute inset-0" />
