@@ -64,13 +64,18 @@ function ContactForm({ isBugReport }: { isBugReport: boolean }) {
       if (screenshotFile && user) {
         const ext = screenshotFile.name.split(".").pop() ?? "png"
         const path = `${user.id}/${Date.now()}.${ext}`
-        const { data: uploadData } = await supabase.storage
+        const { data: uploadData, error: uploadError } = await supabase.storage
           .from("feedback-screenshots")
           .upload(path, screenshotFile, { upsert: false })
+        if (uploadError) throw uploadError
         screenshotUrl = uploadData?.path || null
       }
 
-      await supabase.from("support_messages").insert({
+      if (screenshotFile && !user) {
+        throw new Error("Please sign in before attaching a screenshot.")
+      }
+
+      const { error: insertError } = await supabase.from("support_messages").insert({
         user_id: user?.id ?? null,
         name: name.trim() || null,
         message: message.trim(),
@@ -78,11 +83,12 @@ function ContactForm({ isBugReport }: { isBugReport: boolean }) {
         screenshot_url: screenshotUrl,
         allow_contact: allowContact,
       })
+      if (insertError) throw insertError
 
       setSent(true)
     } catch (err) {
       console.error("Contact form error:", err)
-      setSent(true)
+      setError(err instanceof Error ? err.message : "Message could not be sent. Please try again.")
     } finally {
       setSending(false)
     }

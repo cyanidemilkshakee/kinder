@@ -85,7 +85,7 @@ const sections: Section[] = [
       },
       {
         q: "Can confessions be reported?",
-        a: "Yes. Reports are reviewed by admins.",
+        a: "Yes. Reports are reviewed by the moderation team.",
       },
     ],
   },

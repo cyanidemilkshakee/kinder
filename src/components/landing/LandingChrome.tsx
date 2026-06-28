@@ -6,11 +6,27 @@ import { useEffect, useState } from "react"
 import { Moon, Sun } from "lucide-react"
 import { useTheme } from "next-themes"
 
+import { createClient } from "@/lib/client"
+
 type LandingTopBarProps = {
   isSignedIn?: boolean
 }
 
-export function LandingTopBar({ isSignedIn = false }: LandingTopBarProps) {
+export function LandingTopBar({ isSignedIn: initialIsSignedIn = false }: LandingTopBarProps) {
+  const [isSignedIn, setIsSignedIn] = useState(initialIsSignedIn)
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        setIsSignedIn(true)
+      }
+    }
+    if (!initialIsSignedIn) {
+      checkAuth()
+    }
+  }, [initialIsSignedIn])
   return (
     <header className="fixed top-0 left-0 right-0 z-40 border-b border-border/30 bg-background/70 backdrop-blur-lg">
       <div className="flex w-full items-center justify-between px-4 py-4 sm:px-8 lg:px-16">

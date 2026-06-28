@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Loader2 } from "lucide-react"
 import { isValidUsername, normalizeUsername, usernameGuidance } from "@/lib/username"
+import Link from "next/link"
 
 function GoogleIcon() {
   return (
@@ -24,7 +25,6 @@ function GoogleIcon() {
 function AuthForm({ initialView }: { initialView: "login" | "signup" }) {
   const [view, setView] = useState<"login" | "signup" | "forgot">(initialView)
   const [email, setEmail] = useState("")
-  const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const [checkingSession, setCheckingSession] = useState(true)
@@ -41,16 +41,23 @@ function AuthForm({ initialView }: { initialView: "login" | "signup" }) {
       if (user) {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('real_name, username, has_password, role')
+          .select('real_name, username, has_password, role, is_suspended, ban_expires_at')
           .eq('id', user.id)
           .maybeSingle()
 
-        if (!profile?.real_name || !profile?.username) {
+        const isRestricted = Boolean(profile?.is_suspended)
+          || Boolean(profile?.ban_expires_at && new Date(profile.ban_expires_at).getTime() > Date.now())
+
+        if (profile?.role === 'admin') {
+          await supabase.auth.signOut()
+          setError("This account cannot use the student dashboard.")
+          setCheckingSession(false)
+        } else if (isRestricted) {
+          router.replace('/suspended')
+        } else if (!profile?.real_name || !profile?.username) {
           router.replace('/onboarding')
         } else if (!profile.has_password) {
           router.replace('/settings?setupPassword=1')
-        } else if (profile.role === 'admin') {
-          router.replace('/admin')
         } else {
           router.replace('/discover')
         }
@@ -84,16 +91,14 @@ function AuthForm({ initialView }: { initialView: "login" | "signup" }) {
       throw new Error(usernameGuidance(loginUsername) || "Enter a valid username.")
     }
 
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("email")
-      .eq("username", loginUsername)
-      .maybeSingle()
+    const { data, error } = await supabase.rpc("resolve_login_email", {
+      login_username: loginUsername,
+    })
 
     if (error) throw error
-    if (!data?.email) throw new Error("No account found for that username.")
+    if (!data) throw new Error("No account found for that username.")
 
-    return data.email
+    return data
   }
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -102,7 +107,6 @@ function AuthForm({ initialView }: { initialView: "login" | "signup" }) {
     setMsg("")
 
     const authEmail = email.trim()
-    const signupUsername = normalizeUsername(username)
 
     if ((view === "signup" || view === "forgot")) {
       if (!isValidEmail(authEmail)) {
@@ -112,36 +116,19 @@ function AuthForm({ initialView }: { initialView: "login" | "signup" }) {
       }
     }
 
-    if (view === "signup" && !isValidUsername(signupUsername)) {
-      setError(usernameGuidance(signupUsername) || "Enter a valid username.")
-      return
-    }
-
     setLoading(true)
 
     if (view === "signup") {
-      const { data: existingUsername, error: usernameError } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("username", signupUsername)
-        .maybeSingle()
-
-      if (usernameError) {
-        setError(usernameError.message)
-        setLoading(false)
-        return
-      }
-
-      if (existingUsername) {
-        setError("That username is already taken.")
-        setLoading(false)
-        return
-      }
-
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: authEmail,
         password,
-        options: { data: { username: signupUsername, has_password: true } },
+        options: {
+          data: {
+            has_password: true,
+            accepted_legal: true,
+            legal_accepted_at: new Date().toISOString(),
+          },
+        },
       })
       if (authError) {
         setError(authError.message)
@@ -165,16 +152,24 @@ function AuthForm({ initialView }: { initialView: "login" | "signup" }) {
       } else {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('real_name, username, has_password, role')
+          .select('real_name, username, has_password, role, is_suspended, ban_expires_at')
           .eq('id', data.user?.id)
           .single()
 
-        if (!profile || !profile.real_name || !profile.username) {
+        const isRestricted = Boolean(profile?.is_suspended)
+          || Boolean(profile?.ban_expires_at && new Date(profile.ban_expires_at).getTime() > Date.now())
+
+        if (profile?.role === 'admin') {
+          await supabase.auth.signOut()
+          setError("This account cannot use the student dashboard.")
+          setLoading(false)
+          return
+        } else if (isRestricted) {
+          router.push('/suspended')
+        } else if (!profile || !profile.real_name || !profile.username) {
           router.push('/onboarding')
         } else if (!profile.has_password) {
           router.push('/settings?setupPassword=1')
-        } else if (profile.role === 'admin') {
-          router.push('/admin')
         } else {
           router.push('/discover')
         }
@@ -285,30 +280,6 @@ function AuthForm({ initialView }: { initialView: "login" | "signup" }) {
               />
             </div>
 
-            {view === "signup" && (
-              <div className="space-y-1.5">
-                <label htmlFor="username" className="block text-sm font-medium">
-                  Username
-                </label>
-                <div className="flex rounded-xl border border-input bg-background focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/30 transition-all">
-                  <span className="flex items-center pl-4 text-sm text-muted-foreground">@</span>
-                  <input
-                    id="username"
-                    name="username"
-                    type="text"
-                    required
-                    value={username}
-                    onChange={(e) => setUsername(normalizeUsername(e.target.value))}
-                    placeholder="your_username"
-                    className="block w-full rounded-xl bg-transparent px-1 py-2.5 pr-4 text-sm placeholder:text-muted-foreground focus:outline-none"
-                    minLength={3}
-                    maxLength={20}
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">3-20 lowercase letters, numbers, or underscores.</p>
-              </div>
-            )}
-
             {view !== "forgot" && (
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
@@ -335,6 +306,20 @@ function AuthForm({ initialView }: { initialView: "login" | "signup" }) {
                   className="block w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"
                 />
               </div>
+            )}
+
+            {view === "signup" && (
+              <p className="rounded-xl border border-border/60 bg-muted/30 p-3 text-xs leading-relaxed text-muted-foreground">
+                By signing up, you agree to Kinder&apos;s{" "}
+                <Link href="/terms" className="font-semibold text-primary hover:underline">
+                  Terms &amp; Conditions
+                </Link>
+                {" "}and{" "}
+                <Link href="/privacy" className="font-semibold text-primary hover:underline">
+                  Privacy Policy
+                </Link>
+                .
+              </p>
             )}
 
             <Button

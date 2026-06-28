@@ -8,11 +8,10 @@ Kinder is a social discovery, friendship, and dating platform designed for under
 - **Discovery Algorithm:** Dynamic profile matching that respects user intent (e.g., Friendship vs. Dating) and prevents showing discarded or matched profiles.
 - **Anonymous Confessions:** A completely anonymous messaging system where students can send messages to campus crushes. All messages pass through a moderation queue and require the recipient's consent ("Accept & Read") before they are revealed.
 - **Real-Time Chat:** Supabase-powered real-time chat between mutual matches with generated icebreaker prompts to kickstart conversations.
-- **Admin & Moderation Dashboard:** A secure dashboard exclusively for administrative users to approve/reject confessions and manage user reports. Features automated threshold bans (e.g., 7-day bans or permanent suspensions based on report volume).
 
 ## 🛠️ Tech Stack
 
-- **Framework:** [Next.js 15](https://nextjs.org/) (App Router, React 19)
+- **Framework:** [Next.js 16](https://nextjs.org/) (App Router, React 19)
 - **Styling:** [Tailwind CSS](https://tailwindcss.com/) with custom design tokens for a vibrant, modern UI.
 - **UI Components:** Built using [Radix UI](https://www.radix-ui.com/) primitives and [Lucide Icons](https://lucide.dev/).
 - **Database & Auth:** [Supabase](https://supabase.com/) (PostgreSQL, Realtime, Storage, Authentication).
@@ -43,7 +42,7 @@ Create a `.env.local` file in the root of your project and populate it with your
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=your-supabase-project-url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-supabase-publishable-or-anon-key
 ```
 
 ### 4. Database Setup
@@ -68,4 +67,4 @@ Open [http://localhost:790](http://localhost:790) in your browser to see the res
 
 ## 🔒 Security & Privacy
 
-Kinder is designed to be a safe space. All data is protected by Supabase Row Level Security (RLS) policies to ensure that users can only access information that they are authorized to see (e.g., their own matches, approved confessions, etc.). The Admin dashboard is strictly restricted by a user role check in the database.
+Kinder is designed to be a safe space. All data is protected by Supabase Row Level Security (RLS) policies to ensure that users can only access information that they are authorized to see (e.g., their own matches, approved confessions, etc.).

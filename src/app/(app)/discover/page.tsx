@@ -127,35 +127,16 @@ export default function DiscoverPage() {
     }
     setCurrentUserId(user.id)
 
-    const [myProfileRes, swipesRes, blocksRes, blockedByRes, superLikesSentRes] = await Promise.all([
+    const [myProfileRes, discoverRes] = await Promise.all([
       supabase
         .from("profiles")
-        .select("id, username, real_name, department, year, gender, bio, relationship_intent, relationship_intents, avatar_url, photos, interest_tags, food_preference, drinking_habit, smoking_habit, super_likes_today, super_likes_reset_at, interested_interests, interested_departments, interested_years")
+        .select("id, username, real_name, department, year, gender, bio, relationship_intent, relationship_intents, avatar_url, photos, interest_tags, food_preference, drinking_habit, smoking_habit, super_likes_today, super_likes_reset_at, interested_interests, interested_departments, interested_years, gender_preferences")
         .eq("id", user.id)
         .single(),
-      supabase
-        .from("swipes")
-        .select("swiped_id")
-        .eq("swiper_id", user.id),
-      supabase
-        .from("blocks")
-        .select("blocked_id")
-        .eq("blocker_id", user.id),
-      supabase
-        .from("blocks")
-        .select("blocker_id")
-        .eq("blocked_id", user.id),
-      supabase
-        .from("super_likes")
-        .select("receiver_id")
-        .eq("sender_id", user.id),
+      supabase.rpc("get_discover_profiles", { viewer_id: user.id, limit_val: 30 })
     ])
 
     const myProfile = myProfileRes.data
-    const swipes = swipesRes.data
-    const blocks = blocksRes.data
-    const blockedBy = blockedByRes.data
-    const superLikesSent = superLikesSentRes.data
 
     if (myProfile) {
       setViewerProfile(myProfile as Profile)
@@ -169,33 +150,7 @@ export default function DiscoverPage() {
       }
     }
 
-    const excludedIds = [
-      user.id,
-      ...(swipes?.map((s) => s.swiped_id) || []),
-      ...(blocks?.map((b) => b.blocked_id) || []),
-      ...(blockedBy?.map((b) => b.blocker_id) || []),
-      ...(superLikesSent?.map((s) => s.receiver_id) || []),
-    ]
-
-    let query = supabase
-      .from("profiles")
-      .select("id, username, real_name, department, year, gender, bio, relationship_intent, relationship_intents, avatar_url, photos, interest_tags, food_preference, drinking_habit, smoking_habit")
-      .eq("is_visible", true)
-      .neq("role", "admin")
-      .limit(30)
-
-    if (excludedIds.length > 0) {
-      query = query.not("id", "in", `(${excludedIds.join(",")})`)
-    }
-
-    const { data: availableProfiles } = await query
-    const preferences: DiscoveryPreferences = {
-      interested_interests: myProfile?.interested_interests || [],
-      interested_departments: myProfile?.interested_departments || [],
-      interested_years: myProfile?.interested_years || [],
-    }
-
-    setProfiles((availableProfiles || []).filter((profile) => profileMatchesPreferences(profile, preferences)))
+    setProfiles((discoverRes.data || []) as Profile[])
     setActivePhotoIndex(0)
     setLoading(false)
   }, [])

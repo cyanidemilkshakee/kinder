@@ -24,20 +24,24 @@ export async function GET(request: Request) {
       if (user) {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('real_name, username, has_password, role')
+          .select('real_name, username, has_password, role, is_suspended, ban_expires_at')
           .eq('id', user.id)
           .single()
           
+        const isRestricted = Boolean(profile?.is_suspended)
+          || Boolean(profile?.ban_expires_at && new Date(profile.ban_expires_at).getTime() > Date.now())
+
+        if (profile?.role === 'admin') {
+          await supabase.auth.signOut()
+          return NextResponse.redirect(`${origin}/?error=admin-account`)
+        }
+
+        if (isRestricted) {
+          return NextResponse.redirect(`${origin}/suspended`)
+        }
+
         if (!profile || !profile.real_name || !profile.username) {
           return NextResponse.redirect(`${origin}/onboarding`)
-        }
-
-        if (!profile.has_password) {
-          return NextResponse.redirect(`${origin}/settings?setupPassword=1`)
-        }
-
-        if (profile.role === 'admin') {
-          return NextResponse.redirect(`${origin}/admin`)
         }
       }
       return NextResponse.redirect(`${origin}${next}`)

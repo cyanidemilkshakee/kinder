@@ -1,3 +1,6 @@
+"use client"
+
+import { useEffect, useState } from "react"
 import type { LucideIcon } from "lucide-react"
 import {
   ArrowRight,
@@ -18,7 +21,10 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { LandingFooter, LandingThemeToggle, LandingTopBar } from "@/components/landing/LandingChrome"
-import { createClient } from "@/lib/server"
+import { createClient } from "@/lib/client"
+
+// ... (keep the rest unchanged until the component function)
+// We need to keep the arrays but replace the export default async function AboutPage()
 
 type IconCard = {
   icon: LucideIcon
@@ -113,18 +119,17 @@ function AboutCard({ icon: Icon, title, body, gradient }: IconCard) {
   )
 }
 
-export default async function AboutPage() {
-  let isSignedIn = false
+export default function AboutPage() {
+  const [isSignedIn, setIsSignedIn] = useState(false)
 
-  try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    isSignedIn = Boolean(user)
-  } catch {
-    isSignedIn = false
-  }
+  useEffect(() => {
+    const checkAuth = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) setIsSignedIn(true)
+    }
+    checkAuth()
+  }, [])
 
   return (
     <>
@@ -227,13 +232,23 @@ export default async function AboutPage() {
               </p>
 
               <div className="animate-fade-in-up mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row" style={{ animationDelay: "300ms" }}>
-                <Link
-                  href="/auth/signup"
-                  className="group flex items-center gap-2 rounded-2xl bg-primary px-8 py-4 text-base font-bold text-primary-foreground shadow-xl transition-all hover:scale-105 hover:shadow-primary/40"
-                >
-                  Join Kinder
-                  <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
-                </Link>
+                {isSignedIn ? (
+                  <Link
+                    href="/discover"
+                    className="group flex items-center gap-2 rounded-2xl bg-primary px-8 py-4 text-base font-bold text-primary-foreground shadow-xl transition-all hover:scale-105 hover:shadow-primary/40"
+                  >
+                    Go to Dashboard
+                    <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
+                  </Link>
+                ) : (
+                  <Link
+                    href="/auth/signup"
+                    className="group flex items-center gap-2 rounded-2xl bg-primary px-8 py-4 text-base font-bold text-primary-foreground shadow-xl transition-all hover:scale-105 hover:shadow-primary/40"
+                  >
+                    Join Kinder
+                    <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
+                  </Link>
+                )}
                 <Link
                   href="/#features"
                   className="flex items-center gap-2 rounded-2xl border border-border/60 px-8 py-4 text-base font-semibold text-foreground transition-all hover:border-primary/40 hover:bg-primary/5"

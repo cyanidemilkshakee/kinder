@@ -94,52 +94,26 @@ export default function LikesPage() {
     }
     setCurrentUserId(user.id)
 
-    const [rightSwipesRes, mySwipesRes, superLikesRes, myProfileRes, blocksRes] = await Promise.all([
-      supabase.from("swipes").select("swiper_id").eq("swiped_id", user.id).eq("is_right_swipe", true),
-      supabase.from("swipes").select("swiped_id").eq("swiper_id", user.id),
-      supabase.from("super_likes").select("sender_id").eq("receiver_id", user.id),
+    const [myProfileRes, likersRes] = await Promise.all([
       supabase
         .from("profiles")
-        .select("id, username, real_name, department, year, gender, bio, relationship_intent, relationship_intents, avatar_url, photos, interest_tags, food_preference, drinking_habit, smoking_habit")
+        .select("id, username, real_name, department, year, gender, bio, relationship_intent, relationship_intents, avatar_url, photos, interest_tags, food_preference, drinking_habit, smoking_habit, gender_preferences")
         .eq("id", user.id)
         .single(),
-      supabase
-        .from("blocks")
-        .select("blocker_id, blocked_id")
-        .or(`blocker_id.eq.${user.id},blocked_id.eq.${user.id}`),
+      supabase.rpc("get_pending_likers", { viewer_id: user.id })
     ])
 
     if (myProfileRes.data) {
       setViewerProfile({ ...myProfileRes.data, isSuperLike: false } as Liker)
     }
 
-    const rightSwipes = rightSwipesRes.data || []
-    const mySwipedIds = new Set((mySwipesRes.data || []).map((swipe) => swipe.swiped_id))
-    const superLikerIds = new Set((superLikesRes.data || []).map((like) => like.sender_id))
-    const blockedIds = new Set((blocksRes.data || []).map((block) => block.blocker_id === user.id ? block.blocked_id : block.blocker_id))
-    const pendingLikerIds = rightSwipes
-      .map((swipe) => swipe.swiper_id)
-      .filter((id) => !mySwipedIds.has(id) && !blockedIds.has(id))
+    const enrichedProfiles = (likersRes.data || []) as Liker[]
 
-    if (pendingLikerIds.length === 0) {
+    if (enrichedProfiles.length === 0) {
       setLikers([])
       setLoading(false)
       return
     }
-
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("id, username, real_name, department, year, gender, bio, relationship_intent, relationship_intents, avatar_url, photos, interest_tags, food_preference, drinking_habit, smoking_habit")
-      .in("id", pendingLikerIds)
-      .eq("is_visible", true)
-      .neq("role", "admin")
-
-    const enrichedProfiles: Liker[] = (profiles || [])
-      .map((profile) => ({
-        ...profile,
-        isSuperLike: superLikerIds.has(profile.id),
-      }))
-      .sort((a, b) => (b.isSuperLike ? 1 : 0) - (a.isSuperLike ? 1 : 0))
 
     setLikers(enrichedProfiles)
 

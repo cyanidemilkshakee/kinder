@@ -2,6 +2,7 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { Home, Heart, MessageCircle, User, HeartHandshake, Settings, Info, LogOut, ScrollText, Loader2 } from "lucide-react"
 import { createClient } from "@/lib/client"
@@ -263,7 +264,9 @@ export function Sidebar() {
           >
             <div className="size-10 flex-shrink-0 overflow-hidden rounded-full bg-sidebar-accent shadow-sm">
               {avatar ? (
-                <img src={avatar} alt="You" className="h-full w-full object-cover" />
+                <div className="relative h-full w-full">
+                  <Image src={avatar} alt="You" fill className="object-cover" sizes="40px" />
+                </div>
               ) : (
                 <div className="h-full w-full flex items-center justify-center">
                   <Loader2 className="h-4 w-4 animate-spin text-sidebar-foreground/50" />

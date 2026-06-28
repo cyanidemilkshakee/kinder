@@ -1,8 +1,8 @@
-/* eslint-disable @next/next/no-img-element */
 "use client"
 
 import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent, type TouchEvent } from "react"
 import { ChevronLeft, ChevronRight, Cigarette, Star, Utensils, Wine } from "lucide-react"
+import Image from "next/image"
 import {
   formatHabit,
 } from "@/lib/profile-options"
@@ -196,11 +196,13 @@ export function ProfilePostCard({
       onTouchEnd={onSwipeCommit ? undefined : onTouchEnd}
     >
       <div className="relative aspect-[4/5] min-h-0 bg-muted">
-        <img
+        <Image
           key={`${profile.id}-${activePhotoIndex}-${activePhoto}`}
           src={activePhoto}
           alt={profile.real_name}
-          className={`h-full w-full object-cover ${photoDirection === "next" ? "animate-photo-slide-next" : "animate-photo-slide-prev"}`}
+          fill
+          className={`object-cover ${photoDirection === "next" ? "animate-photo-slide-next" : "animate-photo-slide-prev"}`}
+          sizes="(max-width: 640px) 100vw, 50vw"
         />
 
         {displayPhotos.length > 1 && (
@@ -243,11 +245,15 @@ export function ProfilePostCard({
 
       <div className="flex min-h-0 flex-col">
         <div className="flex items-center gap-3 border-b px-3 py-3 sm:px-5 sm:py-4">
-          <img
-            src={avatarUrl}
-            alt={`${profile.username} avatar`}
-            className="size-10 rounded-full bg-muted object-cover sm:size-12"
-          />
+          <div className="relative size-10 shrink-0 overflow-hidden rounded-full sm:size-12">
+            <Image
+              src={avatarUrl}
+              alt={`${profile.username} avatar`}
+              fill
+              className="bg-muted object-cover"
+              sizes="48px"
+            />
+          </div>
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-sm font-bold leading-tight sm:text-base">{profile.real_name}</h2>
             <p className="truncate text-xs text-muted-foreground sm:text-sm">@{profile.username}</p>

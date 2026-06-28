@@ -200,7 +200,7 @@ export default function ProfilePage() {
       if (!croppedBlob) throw new Error("Failed to crop image")
 
       const fileExt = photoToCrop.file.name.split('.').pop() || "jpg"
-      const fileName = `${profile.id}-${Date.now()}.${fileExt}`
+      const fileName = `${profile.id}/${crypto.randomUUID()}.${fileExt}`
 
       const { error: uploadError } = await supabase.storage
         .from('avatars')

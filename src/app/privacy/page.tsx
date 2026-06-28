@@ -59,7 +59,7 @@ const policySections: PolicySection[] = [
         <li>Other logged-in students can see visible profiles in discovery.</li>
         <li>Only mutual matches can chat.</li>
         <li>Confessions are shown anonymously unless explicitly revealed by the receiver flow.</li>
-        <li>Admins may access profile/report data for moderation and support.</li>
+        <li>The moderation and support team may access profile/report data when needed for safety or support.</li>
       </ul>
     ),
   },

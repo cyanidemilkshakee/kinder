@@ -30,6 +30,7 @@ create table if not exists public.profiles (
   interested_interests text[] default '{}'::text[],
   interested_departments text[] default '{}'::text[],
   interested_years text[] default '{}'::text[],
+  gender_preferences jsonb default '{}'::jsonb,
   super_likes_today int default 0,
   super_likes_reset_at timestamp with time zone default now(),
   relationship_intents text[] default array['friendship'::text],
@@ -81,6 +82,14 @@ create index if not exists messages_match_created_at_idx
 create index if not exists messages_match_unread_idx
   on public.messages (match_id, is_read, created_at desc);
 
+create index if not exists messages_sidebar_unread_idx
+  on public.messages (created_at desc, sender_id)
+  where is_read = false and deleted_at is null;
+
+create index if not exists messages_sidebar_undelivered_idx
+  on public.messages (created_at desc, sender_id)
+  where delivered_at is null and deleted_at is null;
+
 -- MESSAGE REACTIONS
 create table if not exists public.message_reactions (
   id uuid default uuid_generate_v4() primary key,
@@ -103,6 +112,9 @@ create table if not exists public.muted_matches (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   unique(match_id, user_id)
 );
+
+create index if not exists muted_matches_user_match_idx
+  on public.muted_matches (user_id, match_id);
 
 -- Realtime Postgres Changes only emits rows from tables in this publication.
 do $$
@@ -174,6 +186,12 @@ create table if not exists public.super_likes (
   unique (sender_id, receiver_id)
 );
 
+create index if not exists super_likes_receiver_sender_idx
+  on public.super_likes (receiver_id, sender_id);
+
+create index if not exists super_likes_sender_created_idx
+  on public.super_likes (sender_id, created_at desc);
+
 -- BLOCKS
 create table if not exists public.blocks (
   id uuid default gen_random_uuid() primary key,
@@ -183,6 +201,12 @@ create table if not exists public.blocks (
   unique (blocker_id, blocked_id)
 );
 
+create index if not exists blocks_blocked_blocker_idx
+  on public.blocks (blocked_id, blocker_id);
+
+create index if not exists swipes_swiped_right_idx
+  on public.swipes (swiped_id, is_right_swipe, swiper_id);
+
 -- SUPPORT MESSAGES
 create table if not exists public.support_messages (
   id uuid default gen_random_uuid() primary key,
@@ -190,6 +214,8 @@ create table if not exists public.support_messages (
   name text,
   message text not null,
   type text default 'contact' check (type in ('contact', 'bug')),
+  screenshot_url text,
+  allow_contact boolean default false not null,
   created_at timestamp with time zone default now() not null
 );
 
@@ -210,6 +236,32 @@ on conflict (id) do update set
   file_size_limit = excluded.file_size_limit,
   allowed_mime_types = excluded.allowed_mime_types;
 
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'avatars',
+  'avatars',
+  true,
+  5242880,
+  array['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+)
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'feedback-screenshots',
+  'feedback-screenshots',
+  false,
+  10485760,
+  array['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+)
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
 
 -- ADD MISSING COLUMNS (Additive Migration for existing tables)
 alter table public.profiles
@@ -224,6 +276,7 @@ alter table public.profiles
   add column if not exists interested_interests text[] default '{}'::text[],
   add column if not exists interested_departments text[] default '{}'::text[],
   add column if not exists interested_years text[] default '{}'::text[],
+  add column if not exists gender_preferences jsonb default '{}'::jsonb,
   add column if not exists super_likes_today int default 0,
   add column if not exists super_likes_reset_at timestamp with time zone default now(),
   add column if not exists relationship_intents text[] default array['friendship'::text],
@@ -417,6 +470,249 @@ create trigger enforce_message_update_rules
 before update on public.messages
 for each row execute function public.enforce_message_update_rules();
 
+alter table public.support_messages
+  add column if not exists screenshot_url text,
+  add column if not exists allow_contact boolean default false not null;
+
+create or replace function public.is_profile_active(profile_id uuid)
+returns boolean
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.profiles
+    where id = profile_id
+      and coalesce(is_suspended, false) = false
+      and (ban_expires_at is null or ban_expires_at <= now())
+  );
+$$;
+
+revoke all on function public.is_profile_active(uuid) from public;
+grant execute on function public.is_profile_active(uuid) to authenticated;
+
+create schema if not exists private;
+revoke all on schema private from public;
+grant usage on schema private to authenticated;
+
+create or replace function private.is_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.profiles
+    where id = (select auth.uid())
+      and role = 'admin'
+      and coalesce(is_suspended, false) = false
+      and (ban_expires_at is null or ban_expires_at <= now())
+  );
+$$;
+
+revoke all on function private.is_admin() from public;
+grant execute on function private.is_admin() to authenticated;
+
+create or replace function public.resolve_login_email(login_username text)
+returns text
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select p.email
+  from public.profiles p
+  where p.username = lower(regexp_replace(coalesce(login_username, ''), '[^a-z0-9_]', '_', 'g'))
+    and coalesce(p.is_suspended, false) = false
+    and (p.ban_expires_at is null or p.ban_expires_at <= now())
+  limit 1;
+$$;
+
+revoke all on function public.resolve_login_email(text) from public;
+grant execute on function public.resolve_login_email(text) to anon, authenticated;
+
+create or replace function public.enforce_super_like_limit()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  acting_user uuid := (select auth.uid());
+  recent_super_likes int;
+begin
+  if acting_user is null or new.sender_id is distinct from acting_user then
+    raise exception 'Super likes must be sent by the authenticated user';
+  end if;
+
+  if new.sender_id = new.receiver_id then
+    raise exception 'You cannot super like yourself';
+  end if;
+
+  if not (select public.is_profile_active(acting_user)) then
+    raise exception 'Your account is currently restricted';
+  end if;
+
+  new.created_at := now();
+
+  select count(*) into recent_super_likes
+  from public.super_likes
+  where sender_id = acting_user
+    and created_at >= new.created_at - interval '24 hours';
+
+  if recent_super_likes >= 3 then
+    raise exception 'Daily super like limit reached';
+  end if;
+
+  perform set_config('app.super_like_counter_update', '1', true);
+
+  update public.profiles
+  set
+    super_likes_today = recent_super_likes + 1,
+    super_likes_reset_at = case
+      when super_likes_reset_at is null
+        or super_likes_reset_at <= new.created_at - interval '24 hours'
+      then new.created_at
+      else super_likes_reset_at
+    end
+  where id = acting_user;
+
+  perform set_config('app.super_like_counter_update', '', true);
+
+  return new;
+end;
+$$;
+
+revoke all on function public.enforce_super_like_limit() from public;
+
+drop trigger if exists enforce_super_like_limit on public.super_likes;
+create trigger enforce_super_like_limit
+before insert on public.super_likes
+for each row execute function public.enforce_super_like_limit();
+
+create or replace function public.enforce_profile_update_rules()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  acting_user uuid := (select auth.uid());
+  super_like_counter_update boolean :=
+    coalesce(current_setting('app.super_like_counter_update', true), '') = '1';
+begin
+  if acting_user = old.id then
+    if new.id is distinct from old.id then
+      raise exception 'Profile id cannot be changed';
+    end if;
+
+    if new.email is distinct from old.email then
+      raise exception 'Profile email is managed by authentication';
+    end if;
+
+    if new.role is distinct from old.role
+      or new.is_suspended is distinct from old.is_suspended
+      or new.ban_expires_at is distinct from old.ban_expires_at then
+      raise exception 'Moderation fields cannot be changed by users';
+    end if;
+
+    if new.created_at is distinct from old.created_at then
+      raise exception 'Profile creation timestamp cannot be changed';
+    end if;
+
+    if not super_like_counter_update
+      and (
+        new.super_likes_today is distinct from old.super_likes_today
+        or new.super_likes_reset_at is distinct from old.super_likes_reset_at
+      ) then
+      raise exception 'Super like counters are managed by the database';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+revoke all on function public.enforce_profile_update_rules() from public;
+
+drop trigger if exists enforce_profile_update_rules on public.profiles;
+create trigger enforce_profile_update_rules
+before update on public.profiles
+for each row execute function public.enforce_profile_update_rules();
+
+create or replace function public.enforce_match_insert_rules()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  acting_user uuid := (select auth.uid());
+  first_user uuid;
+  second_user uuid;
+begin
+  if acting_user is null then
+    raise exception 'Authentication required to create a match';
+  end if;
+
+  if new.user1_id = new.user2_id then
+    raise exception 'A match requires two different users';
+  end if;
+
+  first_user := least(new.user1_id, new.user2_id);
+  second_user := greatest(new.user1_id, new.user2_id);
+  new.user1_id := first_user;
+  new.user2_id := second_user;
+
+  if acting_user not in (new.user1_id, new.user2_id) then
+    raise exception 'Users can only create their own matches';
+  end if;
+
+  if not (select public.is_profile_active(new.user1_id))
+    or not (select public.is_profile_active(new.user2_id)) then
+    raise exception 'Both users must be active to match';
+  end if;
+
+  if not exists (
+    select 1
+    from public.swipes
+    where swiper_id = new.user1_id
+      and swiped_id = new.user2_id
+      and is_right_swipe = true
+  ) or not exists (
+    select 1
+    from public.swipes
+    where swiper_id = new.user2_id
+      and swiped_id = new.user1_id
+      and is_right_swipe = true
+  ) then
+    raise exception 'Matches require mutual right swipes';
+  end if;
+
+  if exists (
+    select 1
+    from public.blocks
+    where (blocker_id = new.user1_id and blocked_id = new.user2_id)
+      or (blocker_id = new.user2_id and blocked_id = new.user1_id)
+  ) then
+    raise exception 'Blocked users cannot match';
+  end if;
+
+  return new;
+end;
+$$;
+
+revoke all on function public.enforce_match_insert_rules() from public;
+
+drop trigger if exists enforce_match_insert_rules on public.matches;
+create trigger enforce_match_insert_rules
+before insert on public.matches
+for each row execute function public.enforce_match_insert_rules();
+
 -- RLS POLICIES
 alter table public.profiles enable row level security;
 alter table public.swipes enable row level security;
@@ -432,27 +728,80 @@ alter table public.support_messages enable row level security;
 
 -- Profiles Policies
 drop policy if exists "Public profiles are viewable by everyone" on profiles;
-create policy "Public profiles are viewable by everyone" on profiles for select using (true);
+drop policy if exists "Users can view their own profile" on profiles;
+create policy "Users can view their own profile" on profiles for select
+to authenticated
+using ((select auth.uid()) = id);
+
+drop policy if exists "Users can view visible active profiles" on profiles;
+create policy "Users can view visible active profiles" on profiles for select
+to authenticated
+using (
+  (select auth.uid()) is not null
+  and id <> (select auth.uid())
+  and is_visible is true
+  and username is not null
+  and nullif(btrim(real_name), '') is not null
+  and coalesce(is_suspended, false) = false
+  and (ban_expires_at is null or ban_expires_at <= now())
+);
+
+drop policy if exists "Admins can view all profiles" on profiles;
+create policy "Admins can view all profiles" on profiles for select
+to authenticated
+using ((select private.is_admin()));
 
 drop policy if exists "Users can insert their own profile" on profiles;
 create policy "Users can insert their own profile" on profiles for insert with check (auth.uid() = id);
 
 drop policy if exists "Users can update own profile" on profiles;
-create policy "Users can update own profile" on profiles for update using (auth.uid() = id);
+create policy "Users can update own profile" on profiles for update
+to authenticated
+using ((select auth.uid()) = id and (select public.is_profile_active((select auth.uid()))))
+with check ((select auth.uid()) = id and (select public.is_profile_active((select auth.uid()))));
 
 -- Swipes Policies
 drop policy if exists "Users can view their own swipes" on swipes;
 create policy "Users can view their own swipes" on swipes for select using (auth.uid() = swiper_id or auth.uid() = swiped_id);
 
 drop policy if exists "Users can insert their own swipes" on swipes;
-create policy "Users can insert their own swipes" on swipes for insert with check (auth.uid() = swiper_id);
+create policy "Users can insert their own swipes" on swipes for insert
+to authenticated
+with check ((select auth.uid()) = swiper_id and (select public.is_profile_active((select auth.uid()))));
 
 -- Matches Policies
 drop policy if exists "Users can view their own matches" on matches;
 create policy "Users can view their own matches" on matches for select using (auth.uid() = user1_id or auth.uid() = user2_id);
 
 drop policy if exists "Users can insert matches" on matches;
-create policy "Users can insert matches" on matches for insert with check (auth.uid() = user1_id or auth.uid() = user2_id);
+create policy "Users can insert matches" on matches for insert
+to authenticated
+with check (
+  ((select auth.uid()) = user1_id or (select auth.uid()) = user2_id)
+  and user1_id <> user2_id
+  and (select public.is_profile_active(user1_id))
+  and (select public.is_profile_active(user2_id))
+  and exists (
+    select 1
+    from public.swipes
+    where swiper_id = matches.user1_id
+      and swiped_id = matches.user2_id
+      and is_right_swipe = true
+  )
+  and exists (
+    select 1
+    from public.swipes
+    where swiper_id = matches.user2_id
+      and swiped_id = matches.user1_id
+      and is_right_swipe = true
+  )
+  and not exists (
+    select 1
+    from public.blocks
+    where (blocker_id = matches.user1_id and blocked_id = matches.user2_id)
+      or (blocker_id = matches.user2_id and blocked_id = matches.user1_id)
+  )
+);
 
 drop policy if exists "Users can unmatch their own matches" on matches;
 create policy "Users can unmatch their own matches" on matches for delete
@@ -475,7 +824,8 @@ drop policy if exists "Users can insert messages to their matches" on messages;
 create policy "Users can insert messages to their matches" on messages for insert
 to authenticated
 with check (
-  auth.uid() = sender_id and
+  (select auth.uid()) = sender_id and
+  (select public.is_profile_active((select auth.uid()))) and
   exists (
     select 1 from matches 
     where id = messages.match_id 
@@ -491,6 +841,7 @@ create policy "Users can edit their own messages" on messages for update
 to authenticated
 using (
   auth.uid() = sender_id and
+  (select public.is_profile_active((select auth.uid()))) and
   exists (
     select 1 from matches 
     where id = messages.match_id 
@@ -510,6 +861,7 @@ create policy "Recipients can mark messages as read" on messages for update
 to authenticated
 using (
   auth.uid() != sender_id and
+  (select public.is_profile_active((select auth.uid()))) and
   exists (
     select 1 from matches
     where id = messages.match_id
@@ -547,6 +899,7 @@ create policy "Matched users can add reactions" on message_reactions for insert
 to authenticated
 with check (
   user_id = (select auth.uid())
+  and (select public.is_profile_active((select auth.uid())))
   and exists (
     select 1 from public.messages
     where id = message_reactions.message_id
@@ -563,8 +916,8 @@ with check (
 drop policy if exists "Users can update their reactions" on message_reactions;
 create policy "Users can update their reactions" on message_reactions for update
 to authenticated
-using (user_id = (select auth.uid()))
-with check (user_id = (select auth.uid()));
+using (user_id = (select auth.uid()) and (select public.is_profile_active((select auth.uid()))))
+with check (user_id = (select auth.uid()) and (select public.is_profile_active((select auth.uid()))));
 
 drop policy if exists "Users can remove their reactions" on message_reactions;
 create policy "Users can remove their reactions" on message_reactions for delete
@@ -586,6 +939,7 @@ create policy "Users can mute their conversations" on muted_matches for insert
 to authenticated
 with check (
   user_id = (select auth.uid())
+  and (select public.is_profile_active((select auth.uid())))
   and exists (
     select 1 from public.matches
     where id = muted_matches.match_id
@@ -615,7 +969,9 @@ create policy "Users can view own or approved confessions" on confessions for se
 );
 
 drop policy if exists "Users can insert their own confessions" on confessions;
-create policy "Users can insert their own confessions" on confessions for insert with check (auth.uid() = sender_id);
+create policy "Users can insert their own confessions" on confessions for insert
+to authenticated
+with check ((select auth.uid()) = sender_id and (select public.is_profile_active((select auth.uid()))));
 
 drop policy if exists "Users can update their received confessions" on confessions;
 create policy "Users can update their received confessions" on confessions for update using (
@@ -643,7 +999,9 @@ drop policy if exists "Users can view super likes they received" on super_likes;
 create policy "Users can view super likes they received" on super_likes for select using (auth.uid() = receiver_id);
 
 drop policy if exists "Users can insert their own super likes" on super_likes;
-create policy "Users can insert their own super likes" on super_likes for insert with check (auth.uid() = sender_id);
+create policy "Users can insert their own super likes" on super_likes for insert
+to authenticated
+with check ((select auth.uid()) = sender_id and (select public.is_profile_active((select auth.uid()))));
 
 -- Blocks Policies
 drop policy if exists "Users can view blocks they created" on blocks;
@@ -653,7 +1011,9 @@ to authenticated
 using ((select auth.uid()) = blocker_id or (select auth.uid()) = blocked_id);
 
 drop policy if exists "Users can insert their own blocks" on blocks;
-create policy "Users can insert their own blocks" on blocks for insert with check (auth.uid() = blocker_id);
+create policy "Users can insert their own blocks" on blocks for insert
+to authenticated
+with check ((select auth.uid()) = blocker_id and (select public.is_profile_active((select auth.uid()))));
 
 drop policy if exists "Users can delete their own blocks" on blocks;
 create policy "Users can delete their own blocks" on blocks for delete using (auth.uid() = blocker_id);
@@ -666,10 +1026,247 @@ drop policy if exists "Users can view their own support messages" on support_mes
 create policy "Users can view their own support messages" on support_messages for select using (auth.uid() = user_id);
 
 -- Explicit Data API grants for chat and safety actions.
-grant select, update on table public.profiles to authenticated;
+revoke insert, update on table public.profiles from authenticated;
+revoke select on table public.profiles from anon;
+grant select on table public.profiles to authenticated;
+grant insert (
+  id,
+  email,
+  username,
+  has_password,
+  real_name,
+  department,
+  year,
+  gender,
+  bio,
+  relationship_intent,
+  date_of_birth,
+  is_visible,
+  avatar_url,
+  photos,
+  interest_tags,
+  food_preference,
+  drinking_habit,
+  smoking_habit,
+  interested_interests,
+  interested_departments,
+  interested_years,
+  gender_preferences,
+  relationship_intents,
+  read_receipts_enabled
+) on table public.profiles to authenticated;
+grant update (
+  username,
+  has_password,
+  real_name,
+  department,
+  year,
+  gender,
+  bio,
+  relationship_intent,
+  date_of_birth,
+  is_visible,
+  deletion_queued_at,
+  avatar_url,
+  photos,
+  interest_tags,
+  food_preference,
+  drinking_habit,
+  smoking_habit,
+  interested_interests,
+  interested_departments,
+  interested_years,
+  gender_preferences,
+  relationship_intents,
+  read_receipts_enabled,
+  last_seen_at,
+  super_likes_today,
+  super_likes_reset_at
+) on table public.profiles to authenticated;
+grant select, insert on table public.swipes to authenticated;
 grant select, insert, delete on table public.matches to authenticated;
 grant insert on table public.reports to authenticated;
+grant select, insert on table public.super_likes to authenticated;
 grant select, insert, delete on table public.blocks to authenticated;
+grant insert on table public.support_messages to anon, authenticated;
+grant select on table public.support_messages to authenticated;
+
+-- Public avatars are served by bucket visibility; writes stay scoped to each user folder.
+drop policy if exists "Users can upload their avatars" on storage.objects;
+create policy "Users can upload their avatars" on storage.objects for insert
+to authenticated
+with check (
+  bucket_id = 'avatars'
+  and owner_id = (select auth.uid())::text
+  and (storage.foldername(name))[1] = (select auth.uid())::text
+);
+
+drop policy if exists "Users can update their avatars" on storage.objects;
+create policy "Users can update their avatars" on storage.objects for update
+to authenticated
+using (
+  bucket_id = 'avatars'
+  and owner_id = (select auth.uid())::text
+)
+with check (
+  bucket_id = 'avatars'
+  and owner_id = (select auth.uid())::text
+  and (storage.foldername(name))[1] = (select auth.uid())::text
+);
+
+drop policy if exists "Users can delete their avatars" on storage.objects;
+create policy "Users can delete their avatars" on storage.objects for delete
+to authenticated
+using (
+  bucket_id = 'avatars'
+  and owner_id = (select auth.uid())::text
+);
+
+drop policy if exists "Users can upload feedback screenshots" on storage.objects;
+create policy "Users can upload feedback screenshots" on storage.objects for insert
+to authenticated
+with check (
+  bucket_id = 'feedback-screenshots'
+  and owner_id = (select auth.uid())::text
+  and (storage.foldername(name))[1] = (select auth.uid())::text
+);
+
+drop policy if exists "Users can read their feedback screenshots" on storage.objects;
+create policy "Users can read their feedback screenshots" on storage.objects for select
+to authenticated
+using (
+  bucket_id = 'feedback-screenshots'
+  and owner_id = (select auth.uid())::text
+);
+
+-- Private chat media is readable only by participants in the matching conversation.
+drop policy if exists "Matched users can read chat media" on storage.objects;
+create policy "Matched users can read chat media" on storage.objects for select
+to authenticated
+using (
+  bucket_id = 'chat-media'
+  and exists (
+    select 1 from public.matches
+    where (storage.foldername(name))[1] = matches.id::text
+      and (user1_id = (select auth.uid()) or user2_id = (select auth.uid()))
+  )
+);
+
+drop policy if exists "Matched users can upload chat media" on storage.objects;
+create policy "Matched users can upload chat media" on storage.objects for insert
+to authenticated
+with check (
+  bucket_id = 'chat-media'
+  and owner_id = (select auth.uid())::text
+  and exists (
+    select 1 from public.matches
+    where (storage.foldername(name))[1] = matches.id::text
+      and (user1_id = (select auth.uid()) or user2_id = (select auth.uid()))
+  )
+);
+
+drop policy if exists "Users can delete their chat media" on storage.objects;
+create policy "Users can delete their chat media" on storage.objects for delete
+to authenticated
+using (
+  bucket_id = 'chat-media'
+  and owner_id = (select auth.uid())::text
+);
+
+-- Private Broadcast and Presence topics are named match:<match uuid>.
+drop policy if exists "Matched users can receive private chat realtime" on realtime.messages;
+create policy "Matched users can receive private chat realtime" on realtime.messages for select
+to authenticated
+using (
+  realtime.messages.extension in ('broadcast', 'presence')
+  and exists (
+    select 1 from public.matches
+    where 'match:' || matches.id::text = (select realtime.topic())
+      and (user1_id = (select auth.uid()) or user2_id = (select auth.uid()))
+  )
+);
+
+drop policy if exists "Matched users can send private chat realtime" on realtime.messages;
+create policy "Matched users can send private chat realtime" on realtime.messages for insert
+to authenticated
+with check (
+  realtime.messages.extension in ('broadcast', 'presence')
+  and exists (
+    select 1 from public.matches
+    where 'match:' || matches.id::text = (select realtime.topic())
+      and (user1_id = (select auth.uid()) or user2_id = (select auth.uid()))
+  )
+);
+
+
+-- TRIGGERS & FUNCTIONS
+
+-- Function to handle new user signup
+create or replace function public.handle_new_user()
+returns trigger as $$
+declare
+  selected_intent text;
+begin
+  selected_intent := case
+    when coalesce(new.raw_user_meta_data->>'relationship_intent', 'friendship') = 'dating' then 'dating'
+    else 'friendship'
+  end;
+
+  insert into public.profiles (id, email, username, has_password, real_name, department, year, gender, relationship_intent, relationship_intents)
+  values (
+    new.id, 
+    new.email,
+    nullif(
+      lower(regexp_replace(coalesce(new.raw_user_meta_data->>'username', ''), '[^a-z0-9_]', '_', 'g')),
+      ''
+    ),
+    coalesce((new.raw_user_meta_data->>'has_password')::boolean, false),
+    coalesce(new.raw_user_meta_data->>'full_name', coalesce(new.raw_user_meta_data->>'real_name', '')),
+    coalesce(new.raw_user_meta_data->>'department', ''),
+    coalesce(new.raw_user_meta_data->>'year', ''),
+    coalesce(new.raw_user_meta_data->>'gender', ''),
+    selected_intent,
+    array[selected_intent]
+  );
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute procedure public.handle_new_user();
+
+-- Trigger to enforce email domain has been removed to allow any email
+drop trigger if exists ensure_valid_email on auth.users;
+drop function if exists public.validate_user_email();
+
+-- Moderation report threshold trigger
+create or replace function public.handle_report_thresholds()
+returns trigger as $$
+declare
+  report_count int;
+begin
+  select count(*) into report_count
+  from public.reports
+  where reported_id = new.reported_id
+    and status != 'action_taken';
+
+  -- 3 reports -> 7-day restriction
+  if report_count = 3 then
+    update public.profiles
+      set ban_expires_at = now() + interval '7 days'
+      where id = new.reported_id;
+  end if;
+
+  -- 5+ reports -> permanent suspension (manual review to lift)
+  if report_count >= 5 then
+    update public.profiles
+      set is_suspended = true,
+      ban_expires_at = null
+      where id = new.reported_id;
+  end if;
+
 
 -- Private chat media is readable only by participants in the matching conversation.
 drop policy if exists "Matched users can read chat media" on storage.objects;
@@ -807,3 +1404,69 @@ drop trigger if exists evaluate_report_thresholds on public.reports;
 create trigger evaluate_report_thresholds
   after insert on public.reports
   for each row execute procedure public.handle_report_thresholds();
+
+-- RPC FUNCTIONS FOR DISCOVERY AND LIKES
+
+create or replace function public.get_discover_profiles(viewer_id uuid, limit_val int default 30)
+returns setof public.profiles
+language plpgsql
+security definer
+as $$
+declare
+  pref_interests text[];
+  pref_departments text[];
+  pref_years text[];
+  excluded_ids uuid[];
+begin
+  -- Get user preferences
+  select interested_interests, interested_departments, interested_years
+  into pref_interests, pref_departments, pref_years
+  from public.profiles
+  where id = viewer_id;
+
+  -- Build excluded ids
+  select coalesce(array_agg(id), '{}'::uuid[]) into excluded_ids
+  from (
+    select viewer_id as id
+    union
+    select swiped_id from public.swipes where swiper_id = viewer_id
+    union
+    select blocked_id from public.blocks where blocker_id = viewer_id
+    union
+    select blocker_id from public.blocks where blocked_id = viewer_id
+    union
+    select receiver_id from public.super_likes where sender_id = viewer_id
+  ) as excluded;
+
+  return query
+  select p.*
+  from public.profiles p
+  where p.is_visible = true
+    and not (p.id = any(excluded_ids))
+    and (cardinality(pref_departments) = 0 or p.department = any(pref_departments))
+    and (cardinality(pref_years) = 0 or p.year = any(pref_years))
+    and (cardinality(pref_interests) = 0 or pref_interests && p.interest_tags)
+  limit limit_val;
+end;
+$$;
+
+create or replace function public.get_pending_likers(viewer_id uuid)
+returns setof public.profiles
+language sql
+security definer
+as $$
+  select p.*
+  from public.profiles p
+  join public.swipes s on s.swiper_id = p.id
+  where s.swiped_id = viewer_id
+    and s.is_right_swipe = true
+    and p.is_visible = true
+    and p.id not in (
+      select swiped_id from public.swipes where swiper_id = viewer_id
+    )
+    and p.id not in (
+      select blocked_id from public.blocks where blocker_id = viewer_id
+      union
+      select blocker_id from public.blocks where blocked_id = viewer_id
+    );
+$$;

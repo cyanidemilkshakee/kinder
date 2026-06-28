@@ -148,9 +148,17 @@ export default function LandingPage() {
         if (user) {
           const { data: profile } = await supabase
             .from('profiles')
-            .select('real_name, username')
+            .select('real_name, username, role')
             .eq('id', user.id)
             .maybeSingle()
+
+          if (profile?.role === 'admin') {
+            await supabase.auth.signOut()
+            setIsSignedIn(false)
+            setCheckingSession(false)
+            return
+          }
+
           if (!profile?.real_name || !profile?.username) {
             router.replace('/onboarding')
             return
@@ -304,12 +312,6 @@ export default function LandingPage() {
                   >
                     Sign In
                   </Link>
-                  <Link
-                    href="/about"
-                    className="flex items-center gap-2 rounded-2xl border border-border/60 px-8 py-4 text-base font-semibold text-foreground transition-all hover:border-primary/40 hover:bg-primary/5"
-                  >
-                    About Kinder
-                  </Link>
                 </>
               )}
             </div>
@@ -404,8 +406,8 @@ export default function LandingPage() {
             />
             <FeatureCard
               icon={<Shield className="h-6 w-6 text-white" />}
-              title="Admin & Moderation"
-              description="A secure dashboard for administrators to approve confessions, manage reports, and enforce community guidelines with automated threshold-based bans."
+              title="Safety Moderation"
+              description="Confessions, reports, and community guideline issues are reviewed through protected moderation workflows before they affect students."
               gradient="bg-gradient-to-br from-blue-400 to-indigo-500"
               delay={400}
             />
@@ -585,7 +587,7 @@ export default function LandingPage() {
                   <div className="space-y-4">
                     {[
                       { icon: <Lock className="h-4 w-4" />, text: "Row Level Security on all database tables" },
-                      { icon: <Shield className="h-4 w-4" />, text: "Admin moderation for all anonymous content" },
+                      { icon: <Shield className="h-4 w-4" />, text: "Moderation for all anonymous content" },
                       { icon: <Check className="h-4 w-4" />, text: "College email verification for every account" },
                       { icon: <Zap className="h-4 w-4" />, text: "Automated bans for policy violations" },
                       { icon: <Users className="h-4 w-4" />, text: "Consent-gated confession reveals" },
@@ -619,7 +621,7 @@ export default function LandingPage() {
                       <Shield className="h-5 w-5 text-primary" />
                     </div>
                     <h3 className="mb-1 text-base font-bold">Report & Block</h3>
-                    <p className="text-sm text-muted-foreground">One-tap reporting for any profile or message. Our admin team reviews all reports with transparent outcomes.</p>
+                    <p className="text-sm text-muted-foreground">One-tap reporting for any profile or message. The moderation team reviews reports with transparent outcomes.</p>
                   </div>
                 </div>
               </div>

@@ -22,7 +22,11 @@ type ProfileSettings = {
   interested_departments: string[] | null
   interested_years: string[] | null
   read_receipts_enabled: boolean
+  gender_preferences: Record<string, string> | null
+  relationship_intents: string[] | null
 }
+
+const GENDER_PREFS = ["Male", "Female", "Non-binary", "Any"]
 
 type PreferenceKey = "interested_interests" | "interested_departments" | "interested_years"
 
@@ -58,7 +62,7 @@ function SettingsContent() {
 
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, is_visible, deletion_queued_at, has_password, interested_interests, interested_departments, interested_years, read_receipts_enabled")
+        .select("id, is_visible, deletion_queued_at, has_password, interested_interests, interested_departments, interested_years, read_receipts_enabled, gender_preferences, relationship_intents")
         .eq("id", user.id)
         .single()
 
@@ -92,6 +96,32 @@ function SettingsContent() {
       showToast("Settings updated successfully", "success")
     } catch (error: any) {
       showToast("Failed to update setting: " + error.message, "error")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const updateGenderPreference = async (intent: string, preference: string) => {
+    if (!settings) return
+    
+    const currentPrefs = settings.gender_preferences || {}
+    const newPrefs = { ...currentPrefs, [intent]: preference }
+    
+    setSettings({ ...settings, gender_preferences: newPrefs })
+    setSaving(true)
+
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ gender_preferences: newPrefs })
+        .eq("id", settings.id)
+
+      if (error) {
+        setSettings({ ...settings, gender_preferences: currentPrefs }) // revert
+        throw error
+      }
+    } catch (error: any) {
+      showToast("Failed to update gender preference: " + error.message, "error")
     } finally {
       setSaving(false)
     }
@@ -376,6 +406,40 @@ function SettingsContent() {
                 <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground border-b border-border/50 pb-2">Interested In</h3>
 
                 <div className="space-y-4">
+                  {(settings?.relationship_intents || []).length > 0 && (
+                    <div className="space-y-4">
+                      {settings.relationship_intents?.map((intent) => {
+                        const currentPref = settings.gender_preferences?.[intent] || "Any"
+                        return (
+                          <div key={intent} className="space-y-2">
+                            <div>
+                              <h4 className="font-semibold text-sm capitalize">Gender Preference ({intent})</h4>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {GENDER_PREFS.map((gp) => {
+                                const selected = currentPref === gp
+                                return (
+                                  <button
+                                    key={gp}
+                                    type="button"
+                                    onClick={() => updateGenderPreference(intent, gp)}
+                                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${
+                                      selected
+                                        ? "border-primary bg-primary/10 text-primary"
+                                        : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                                    }`}
+                                  >
+                                    {gp}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
                   <div className="space-y-2">
                     <div>
                       <h4 className="font-semibold text-sm">Interests</h4>
