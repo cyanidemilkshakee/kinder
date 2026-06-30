@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
     root: "C:/Users/movva/Documents/GitHub/kinder",
   },
   images: {
+    dangerouslyAllowSVG: true,
     remotePatterns: [
       {
         protocol: 'https',

@@ -3,7 +3,7 @@
 
 import { Fragment, use, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Ban, Volume2, VolumeX } from "lucide-react"
+import { Ban, Unlink, Volume2, VolumeX } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { MotionModal } from "@/components/MotionModal"
 import { ProfilePostCard, type PostProfile } from "@/components/ProfilePostCard"
@@ -69,6 +69,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [activePhotoIndex, setActivePhotoIndex] = useState(0)
   const [recording, setRecording] = useState(false)
   const [recordingSeconds, setRecordingSeconds] = useState(0)
+  const [isBlockedByMe, setIsBlockedByMe] = useState(false)
+  const [isBlockedByThem, setIsBlockedByThem] = useState(false)
 
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -202,6 +204,16 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       if (!me || !other) {
         router.push("/chat")
         return
+      }
+
+      const { data: blockData } = await supabase
+        .from("blocks")
+        .select("blocker_id, blocked_id")
+        .or(`and(blocker_id.eq.${user.id},blocked_id.eq.${other.id}),and(blocker_id.eq.${other.id},blocked_id.eq.${user.id})`)
+
+      if (blockData) {
+        setIsBlockedByMe(blockData.some((b) => b.blocker_id === user.id))
+        setIsBlockedByThem(blockData.some((b) => b.blocker_id === other.id))
       }
 
       setCurrentUserProfile(me)
@@ -676,6 +688,48 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     ))
   }
 
+  const handleBlock = async () => {
+    if (!otherUserProfile || !currentUserId) return
+    if (!window.confirm(`Are you sure you want to block ${otherUserProfile.real_name}?`)) return
+    
+    setSafetyBusy(true)
+    const { error } = await supabase.from("blocks").insert({
+      blocker_id: currentUserId,
+      blocked_id: otherUserProfile.id
+    })
+    setSafetyBusy(false)
+    if (!error) {
+      setIsBlockedByMe(true)
+    }
+  }
+
+  const handleUnblock = async () => {
+    if (!otherUserProfile || !currentUserId) return
+    setSafetyBusy(true)
+    const { error } = await supabase.from("blocks")
+      .delete()
+      .eq("blocker_id", currentUserId)
+      .eq("blocked_id", otherUserProfile.id)
+    setSafetyBusy(false)
+    if (!error) {
+      setIsBlockedByMe(false)
+    }
+  }
+
+  const handleDeleteChat = async () => {
+    if (!otherUserProfile || !currentUserId) return
+    if (!window.confirm("Are you sure you want to delete this chat and unmatch? You can choose to like each other again later.")) return
+    
+    setSafetyBusy(true)
+    await supabase.from("matches").delete().eq("id", chatId)
+    await supabase.from("swipes").delete()
+      .in("swiper_id", [currentUserId, otherUserProfile.id])
+      .in("swiped_id", [currentUserId, otherUserProfile.id])
+      
+    setSafetyBusy(false)
+    router.push("/chat")
+  }
+
   const toggleMute = async () => {
     if (!currentUserId) return
     setSafetyBusy(true)
@@ -773,14 +827,27 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           </Button>
           <Button
             type="button"
-            variant="destructive"
+            variant="ghost"
             size="icon"
-            className="size-10 rounded-full [&_svg]:size-5"
-            onClick={() => setEndConversationOpen(true)}
-            aria-label="End conversation"
-            title="End conversation"
+            className="size-10 rounded-full [&_svg]:size-5 text-destructive"
+            onClick={handleBlock}
+            disabled={safetyBusy || isBlockedByMe}
+            aria-label="Block"
+            title="Block"
           >
             <Ban />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-10 rounded-full [&_svg]:size-5 text-destructive"
+            onClick={handleDeleteChat}
+            disabled={safetyBusy}
+            aria-label="Delete chat & Unmatch"
+            title="Delete chat & Unmatch"
+          >
+            <Unlink />
           </Button>
         </div>
       </header>
@@ -855,26 +922,40 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             )
           })
         )}
-        <div ref={messagesEndRef} />
+        <div ref={messagesEndRef} className="h-2 w-full flex-shrink-0" />
       </div>
 
-      <ChatComposer
-        value={newMessage}
-        otherUserName={otherUserName}
-        replyTo={replyTo}
-        busy={composerBusy}
-        recording={recording}
-        recordingSeconds={recordingSeconds}
-        error={error}
-        starters={conversationStarters}
-        onChange={updateComposer}
-        onSend={sendTextMessage}
-        onCancelReply={() => setReplyTo(null)}
-        onUpload={uploadMedia}
-        onStartRecording={startRecording}
-        onStopRecording={stopRecording}
-        onCancelRecording={cancelRecording}
-      />
+      {isBlockedByMe ? (
+        <div className="flex flex-col items-center justify-center p-6 bg-muted/30 border-t">
+          <p className="text-sm font-semibold mb-4 text-muted-foreground">You blocked this user. They cannot message you.</p>
+          <div className="flex gap-4">
+            <Button onClick={handleUnblock} variant="outline" className="rounded-xl">Unblock</Button>
+            <Button onClick={handleDeleteChat} variant="destructive" className="rounded-xl">Delete Chat</Button>
+          </div>
+        </div>
+      ) : isBlockedByThem ? (
+        <div className="flex flex-col items-center justify-center p-6 bg-muted/30 border-t">
+          <p className="text-sm font-semibold text-muted-foreground">This user is unavailable.</p>
+        </div>
+      ) : (
+        <ChatComposer
+          value={newMessage}
+          otherUserName={otherUserName}
+          replyTo={replyTo}
+          busy={composerBusy}
+          recording={recording}
+          recordingSeconds={recordingSeconds}
+          error={error}
+          starters={conversationStarters}
+          onChange={updateComposer}
+          onSend={sendTextMessage}
+          onCancelReply={() => setReplyTo(null)}
+          onUpload={uploadMedia}
+          onStartRecording={startRecording}
+          onStopRecording={stopRecording}
+          onCancelRecording={cancelRecording}
+        />
+      )}
 
       {profileModalOpen && otherUserProfile ? (
         <div

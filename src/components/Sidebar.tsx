@@ -4,7 +4,7 @@
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
-import { Home, Heart, MessageCircle, User, HeartHandshake, Settings, Info, LogOut, ScrollText, Loader2 } from "lucide-react"
+import { Home, Heart, MessageCircle, User, HeartHandshake, Settings, Info, LogOut, ScrollText, Loader2, ChevronRight, ChevronDown } from "lucide-react"
 import { createClient } from "@/lib/client"
 import { useRouter } from "next/navigation"
 import { useEffect, useState, useRef } from "react"
@@ -16,6 +16,8 @@ type UserProfile = {
   username: string | null
   avatar_url: string | null
   id: string
+  is_suspended?: boolean
+  ban_expires_at?: string | null
 }
 
 export function Sidebar() {
@@ -26,6 +28,7 @@ export function Sidebar() {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [unreadChatCount, setUnreadChatCount] = useState(0)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const [likesExpanded, setLikesExpanded] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
   usePresenceHeartbeat()
@@ -39,7 +42,7 @@ export function Sidebar() {
       if (!user) return
       const { data } = await supabase
         .from('profiles')
-        .select('id, real_name, username, avatar_url')
+        .select('id, real_name, username, avatar_url, is_suspended, ban_expires_at')
         .eq('id', user.id)
         .single()
       if (data && isMounted) setUserProfile(data)
@@ -101,6 +104,12 @@ export function Sidebar() {
   }, [])
 
   useEffect(() => {
+    if (pathname.startsWith("/likes")) {
+      setLikesExpanded(true)
+    }
+  }, [pathname])
+
+  useEffect(() => {
     setProfileMenuOpen(false)
   }, [pathname])
 
@@ -118,7 +127,15 @@ export function Sidebar() {
 
   const upperLinks = [
     { name: "Discover", href: "/discover", icon: Home },
-    { name: "Likes", href: "/likes", icon: Heart },
+    { 
+      name: "Likes", 
+      href: "#", 
+      icon: Heart,
+      subLinks: [
+        { name: "See who liked you", href: "/likes" },
+        { name: "See who you liked", href: "/likes/sent" }
+      ]
+    },
     { name: "Chat", href: "/chat", icon: MessageCircle },
     { name: "Confessions", href: "/confessions", icon: ScrollText },
   ]
@@ -136,6 +153,9 @@ export function Sidebar() {
   const avatar = userProfile?.avatar_url
     || (userProfile?.id ? `https://api.dicebear.com/9.x/micah/svg?seed=${userProfile.id}` : null)
 
+  const isRestricted = Boolean(userProfile?.is_suspended) 
+    || Boolean(userProfile?.ban_expires_at && new Date(userProfile.ban_expires_at).getTime() > Date.now())
+
   return (
     <div className="flex h-screen w-64 flex-col border-r border-sidebar-border bg-sidebar flex-shrink-0 relative">
       {/* Subtle gradient overlay */}
@@ -148,20 +168,69 @@ export function Sidebar() {
             <Heart className="h-4 w-4 text-sidebar-primary fill-sidebar-primary" />
           </div>
           <div className="flex flex-col leading-none">
-            <span className="text-xl font-extrabold tracking-tight text-sidebar-foreground">Kinder</span>
+            <span className="text-[22px] font-extrabold tracking-tight text-sidebar-foreground">Kinder</span>
           </div>
         </Link>
       </div>
 
       {/* Upper Navigation */}
-      <nav className="relative flex-1 overflow-y-auto px-3 py-4 space-y-1">
+      <nav className={`relative flex-1 overflow-y-auto px-3 py-4 space-y-1 ${isRestricted ? 'opacity-50 pointer-events-none' : ''}`}>
         {upperLinks.map((item) => {
+          if (item.name === "Likes") {
+            const isMainActive = pathname.startsWith("/likes")
+            return (
+              <div key={item.name} className="space-y-1">
+                <button
+                  onClick={() => setLikesExpanded(!likesExpanded)}
+                  className={`w-full flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-extrabold transition-all duration-200 group ${
+                    isMainActive
+                      ? "text-sidebar-primary"
+                      : "text-sidebar-foreground/60 hover:bg-sidebar-accent/40 hover:text-sidebar-foreground"
+                  }`}
+                >
+                  <div className="flex items-center">
+                    <item.icon
+                      className={`mr-3 h-[18px] w-[18px] flex-shrink-0 transition-colors ${
+                        isMainActive ? "text-sidebar-primary" : "text-sidebar-foreground/50 group-hover:text-sidebar-foreground"
+                      }`}
+                      aria-hidden="true"
+                    />
+                    <span className="tracking-wide">{item.name}</span>
+                  </div>
+                  <div className={`p-1 rounded-lg transition-all duration-200 ${likesExpanded ? "bg-sidebar-accent/20 text-sidebar-foreground" : "text-sidebar-foreground/60 group-hover:text-sidebar-foreground"}`}>
+                    {likesExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  </div>
+                </button>
+                {likesExpanded && item.subLinks && (
+                  <div className="pl-9 pr-2 space-y-1 mt-1 animate-in fade-in slide-in-from-top-2">
+                    {item.subLinks.map(subItem => {
+                      const isSubActive = pathname === subItem.href
+                      return (
+                        <Link
+                          key={subItem.name}
+                          href={subItem.href}
+                          className={`flex items-center rounded-xl px-3 py-2 text-sm font-extrabold transition-all duration-200 ${
+                            isSubActive
+                              ? "bg-sidebar-primary/20 text-sidebar-primary shadow-sm"
+                              : "text-sidebar-foreground/60 hover:bg-sidebar-accent/40 hover:text-sidebar-foreground"
+                          }`}
+                        >
+                          <span className="tracking-wide flex-1">{subItem.name}</span>
+                        </Link>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          }
+
           const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href))
           return (
             <Link
               key={item.name}
               href={item.href}
-              className={`group flex items-center rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
+              className={`group flex items-center rounded-xl px-3 py-2.5 text-sm font-extrabold transition-all duration-200 ${
                 isActive
                   ? "bg-sidebar-primary/20 text-sidebar-primary shadow-sm"
                   : "text-sidebar-foreground/60 hover:bg-sidebar-accent/40 hover:text-sidebar-foreground"
@@ -201,14 +270,14 @@ export function Sidebar() {
 
       {/* Bottom Section */}
       <div className="relative shrink-0 p-3 pt-2">
-        <nav className="space-y-0.5 mb-3">
+        <nav className={`space-y-0.5 mb-3 ${isRestricted ? 'opacity-50 pointer-events-none' : ''}`}>
           {bottomLinks.map((item) => {
             const isActive = pathname.startsWith(item.href)
             return (
               <Link
                 key={item.name}
                 href={item.href}
-                className={`group flex items-center rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
+                className={`group flex items-center rounded-xl px-3 py-2.5 text-sm font-extrabold transition-all duration-200 ${
                   isActive
                     ? "bg-sidebar-primary/20 text-sidebar-primary shadow-sm"
                     : "text-sidebar-foreground/60 hover:bg-sidebar-accent/40 hover:text-sidebar-foreground"
@@ -230,24 +299,28 @@ export function Sidebar() {
         <div className="relative" ref={menuRef}>
           {profileMenuOpen && (
             <div className="absolute bottom-full left-0 w-full mb-2 z-50 rounded-xl border border-sidebar-border/60 bg-[#ff9999] p-1.5 backdrop-blur-md shadow-lg animate-in fade-in slide-in-from-bottom-2">
-              <Link
-                href="/profile"
-                className="group flex items-center rounded-lg px-3 py-2.5 text-sm font-medium text-black/80 transition-all duration-200 hover:bg-black/10 hover:text-black"
-              >
-                <User className="mr-3 h-[18px] w-[18px] flex-shrink-0" aria-hidden="true" />
-                <span className="tracking-wide">Profile</span>
-              </Link>
-              <Link
-                href="/settings"
-                className="group flex items-center rounded-lg px-3 py-2.5 text-sm font-medium text-black/80 transition-all duration-200 hover:bg-black/10 hover:text-black"
-              >
-                <Settings className="mr-3 h-[18px] w-[18px] flex-shrink-0" aria-hidden="true" />
-                <span className="tracking-wide">Settings</span>
-              </Link>
+              {!isRestricted && (
+                <>
+                  <Link
+                    href="/profile"
+                    className="group flex items-center rounded-lg px-3 py-2.5 text-sm font-extrabold text-black/80 transition-all duration-200 hover:bg-black/10 hover:text-black"
+                  >
+                    <User className="mr-3 h-[18px] w-[18px] flex-shrink-0" aria-hidden="true" />
+                    <span className="tracking-wide">Profile</span>
+                  </Link>
+                  <Link
+                    href="/settings"
+                    className="group flex items-center rounded-lg px-3 py-2.5 text-sm font-extrabold text-black/80 transition-all duration-200 hover:bg-black/10 hover:text-black"
+                  >
+                    <Settings className="mr-3 h-[18px] w-[18px] flex-shrink-0" aria-hidden="true" />
+                    <span className="tracking-wide">Settings</span>
+                  </Link>
+                </>
+              )}
               <ThemeToggle />
               <button
                 onClick={handleLogout}
-                className="group flex w-full items-center rounded-lg px-3 py-2.5 text-sm font-medium text-black/80 transition-all duration-200 hover:bg-black/10 hover:text-black"
+                className="group flex w-full items-center rounded-lg px-3 py-2.5 text-sm font-extrabold text-black/80 transition-all duration-200 hover:bg-black/10 hover:text-black"
               >
                 <LogOut className="mr-3 h-[18px] w-[18px] flex-shrink-0" aria-hidden="true" />
                 <span className="tracking-wide">Sign Out</span>
@@ -260,9 +333,9 @@ export function Sidebar() {
             type="button"
             onClick={() => setProfileMenuOpen((open) => !open)}
             aria-expanded={profileMenuOpen}
-            className="flex w-full items-center gap-3 rounded-xl border border-sidebar-border/50 bg-sidebar-accent/50 px-3 py-3 text-left backdrop-blur-sm transition-all duration-200 hover:bg-sidebar-accent/70"
+            className="flex w-full items-center gap-3 rounded-xl border border-sidebar-border/50 bg-black/10 px-3 py-3 text-left backdrop-blur-sm transition-all duration-200 hover:bg-black/20"
           >
-            <div className="size-10 flex-shrink-0 overflow-hidden rounded-full bg-sidebar-accent shadow-sm">
+            <div className="size-10 flex-shrink-0 overflow-hidden rounded-full bg-black/20 shadow-sm">
               {avatar ? (
                 <div className="relative h-full w-full">
                   <Image src={avatar} alt="You" fill className="object-cover" sizes="40px" />

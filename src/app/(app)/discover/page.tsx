@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Flag, Heart, Loader2, Star, X } from "lucide-react"
+import { Ban, Flag, Heart, Loader2, Send, Star, X } from "lucide-react"
 import { AnimatedSegmentedControl } from "@/components/AnimatedSegmentedControl"
 import { MotionModal } from "@/components/MotionModal"
 import { ProfilePostCard, type ProfileSwipeDirection } from "@/components/ProfilePostCard"
@@ -52,6 +52,7 @@ type ReportModal = {
   open: boolean
   targetId: string | null
   targetName: string
+  step: "reason" | "submitted"
 }
 
 type TouchPoint = {
@@ -104,8 +105,9 @@ export default function DiscoverPage() {
   const [swipeDirection, setSwipeDirection] = useState<ProfileSwipeDirection | null>(null)
   const [touchStart, setTouchStart] = useState<TouchPoint | null>(null)
   const [matchModal, setMatchModal] = useState<MatchModal>({ open: false, matchedUser: null, matchId: null })
-  const [reportModal, setReportModal] = useState<ReportModal>({ open: false, targetId: null, targetName: "" })
+  const [reportModal, setReportModal] = useState<ReportModal>({ open: false, targetId: null, targetName: "", step: "reason" })
   const [reportReason, setReportReason] = useState("")
+  const [otherReportReason, setOtherReportReason] = useState("")
   const [reportLoading, setReportLoading] = useState(false)
   const [toast, setToast] = useState<Toast | null>(null)
   const [activePhotoIndex, setActivePhotoIndex] = useState(0)
@@ -213,12 +215,14 @@ export default function DiscoverPage() {
         swiper_id: currentUserId,
         swiped_id: current.id,
         is_right_swipe: true,
+        relationship_intent: activeIntent,
       })
     } else {
       await supabase.from("swipes").insert({
         swiper_id: currentUserId,
         swiped_id: current.id,
         is_right_swipe: isRight,
+        relationship_intent: activeIntent,
       })
     }
 
@@ -238,22 +242,43 @@ export default function DiscoverPage() {
     }
   }
 
-  const handleReport = async () => {
-    if (!reportReason || !reportModal.targetId || !currentUserId) return
-    const reportedId = reportModal.targetId
+  const handleReport = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!reportModal.targetId || !reportReason) return
+
     setReportLoading(true)
+    const finalReason = reportReason === "Other" && otherReportReason.trim() 
+      ? `Other: ${otherReportReason.trim()}` 
+      : reportReason
+
     const { error } = await supabase.from("reports").insert({
-      reporter_id: currentUserId,
+      reporter_id: viewerProfile?.id,
       reported_id: reportModal.targetId,
-      reason: reportReason,
+      reason: finalReason,
     })
-    setReportLoading(false)
-    closeReportModal()
-    if (error) {
-      showToast("Failed to submit report.", "error")
+
+    if (!error) {
+      showToast("Report submitted successfully.", "success")
+      setReportModal(prev => ({ ...prev, step: "submitted" }))
+      setReportReason("")
+      setOtherReportReason("")
     } else {
-      showToast("Report submitted. Our moderators will review it.", "success")
-      setProfiles((prev) => prev.filter((profile) => profile.id !== reportedId))
+      showToast("Failed to submit report.", "error")
+      setProfiles((prev) => prev.filter((profile) => profile.id !== reportModal.targetId))
+    }
+  }
+
+  const handleBlock = async (userId: string) => {
+    if (!window.confirm("Are you sure you want to block this user?")) return
+    const { error } = await supabase.from("blocks").insert({
+      blocker_id: viewerProfile?.id,
+      blocked_id: userId
+    })
+    if (!error) {
+      showToast("User blocked successfully.", "success")
+      setProfiles((prev) => prev.filter((p) => p.id !== userId))
+    } else {
+      showToast("Failed to block user.", "error")
     }
   }
 
@@ -267,11 +292,12 @@ export default function DiscoverPage() {
   }
 
   const closeReportModal = () => {
-    setReportModal((prev) => ({ ...prev, open: false }))
-    window.setTimeout(() => {
-      setReportModal({ open: false, targetId: null, targetName: "" })
+    if (!reportModal.open) return
+    setTimeout(() => {
+      setReportModal({ open: false, targetId: null, targetName: "", step: "reason" })
       setReportReason("")
-    }, 180)
+      setOtherReportReason("")
+    }, 150)
   }
 
   const handleCardSwipeCommit = (direction: ProfileSwipeDirection) => {
@@ -294,7 +320,7 @@ export default function DiscoverPage() {
       return
     }
 
-    setReportModal({ open: true, targetId: current.id, targetName: current.real_name })
+    setReportModal({ open: true, targetId: current.id, targetName: current.real_name, step: "reason" })
   }
 
   const handleNextPhoto = (event: React.MouseEvent) => {
@@ -349,7 +375,7 @@ export default function DiscoverPage() {
     }
 
     if (window.confirm(`Report ${current.real_name}?`)) {
-      setReportModal({ open: true, targetId: current.id, targetName: current.real_name })
+      setReportModal({ open: true, targetId: current.id, targetName: current.real_name, step: "reason" })
     }
   }
 
@@ -408,12 +434,21 @@ export default function DiscoverPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setReportModal({ open: true, targetId: current.id, targetName: current.real_name })}
-                className="flex size-12 items-center justify-center rounded-full border border-destructive/40 bg-background text-destructive shadow-md transition hover:scale-105 hover:bg-destructive/10 active:scale-95"
+                onClick={() => setReportModal({ open: true, targetId: current.id, targetName: current.real_name, step: "reason" })}
+                className="flex size-12 mt-2 items-center justify-center rounded-full border border-destructive/40 bg-background text-destructive shadow-md transition hover:scale-105 hover:bg-destructive/10 active:scale-95"
                 aria-label="Report"
                 title="Report"
               >
                 <Flag className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleBlock(current.id)}
+                className="flex size-12 mt-2 items-center justify-center rounded-full border border-destructive/40 bg-background text-destructive shadow-md transition hover:scale-105 hover:bg-destructive/10 active:scale-95"
+                aria-label="Block"
+                title="Block"
+              >
+                <Ban className="h-5 w-5" />
               </button>
             </div>
 
@@ -447,11 +482,20 @@ export default function DiscoverPage() {
                 type="button"
                 onClick={() => handleSwipe(true, true, "up")}
                 disabled={superLikesLeft <= 0}
-                className="flex size-12 items-center justify-center rounded-full border border-primary/40 bg-background text-primary shadow-md transition hover:scale-105 hover:bg-primary/10 active:scale-95 disabled:cursor-not-allowed disabled:opacity-45"
+                className="flex size-12 mt-2 items-center justify-center rounded-full border border-primary/40 bg-background text-primary shadow-md transition hover:scale-105 hover:bg-primary/10 active:scale-95 disabled:cursor-not-allowed disabled:opacity-45"
                 aria-label="Super like"
                 title={`${superLikesLeft} super likes left`}
               >
                 <Star className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push(`/confessions?to=${current.username}`)}
+                className="flex size-12 mt-2 items-center justify-center rounded-full border border-primary/40 bg-background text-primary shadow-md transition hover:scale-105 hover:bg-primary/10 active:scale-95"
+                aria-label="Send Confession"
+                title="Send Confession"
+              >
+                <Send className="h-5 w-5" />
               </button>
             </div>
           </div>
@@ -520,46 +564,87 @@ export default function DiscoverPage() {
         open={reportModal.open}
         placement="bottom"
         className="bg-black/60"
-        panelClassName="w-full max-w-sm overflow-hidden rounded-lg border bg-background"
+        panelClassName="w-full max-w-md overflow-hidden rounded-lg border bg-background"
       >
           <div>
-            <div className="border-b p-5">
-              <h3 className="text-lg font-bold">Report {reportModal.targetName}</h3>
-              <p className="mt-1 text-sm text-muted-foreground">Help keep Kinder safe. Select a reason:</p>
-            </div>
-            <div className="flex max-h-64 flex-col gap-2 overflow-y-auto p-4">
-              {REPORT_REASONS.map((reason) => (
-                <button
-                  key={reason}
-                  onClick={() => setReportReason(reason)}
-                  className={`w-full rounded-lg border px-4 py-2.5 text-left text-sm transition-all ${
-                    reportReason === reason
-                      ? "border-destructive/50 bg-destructive/10 font-medium text-foreground"
-                      : "border-border bg-background hover:bg-muted/50"
-                  }`}
-                >
-                  {reason}
-                </button>
-              ))}
-            </div>
-            <div className="flex gap-3 border-t p-4">
-              <Button
-                variant="outline"
-                className="flex-1 rounded-lg"
-                onClick={closeReportModal}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                className="flex-1 rounded-lg"
-                onClick={handleReport}
-                disabled={!reportReason || reportLoading}
-              >
-                {reportLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Flag className="h-4 w-4" />}
-                Submit
-              </Button>
-            </div>
+            {reportModal.step === "reason" ? (
+              <>
+                <div className="border-b p-5">
+                  <h3 className="text-lg font-bold">Report {reportModal.targetName}</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">Help keep Kinder safe. Select a reason:</p>
+                </div>
+                <div className="flex max-h-96 flex-col gap-2 overflow-y-auto p-4">
+                  {REPORT_REASONS.map((reason) => (
+                    <div key={reason}>
+                      <button
+                        onClick={() => setReportReason(reason)}
+                        className={`w-full rounded-lg border px-4 py-2.5 text-left text-sm transition-all ${
+                          reportReason === reason
+                            ? "border-destructive/50 bg-destructive/10 font-medium text-foreground"
+                            : "border-border bg-background hover:bg-muted/50"
+                        }`}
+                      >
+                        {reason}
+                      </button>
+                      {reason === "Other" && reportReason === "Other" && (
+                        <div className="mt-2">
+                          <textarea
+                            className="w-full resize-none rounded-lg border border-border bg-background p-3 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                            placeholder="Please specify the reason..."
+                            rows={3}
+                            value={otherReportReason}
+                            onChange={(e) => setOtherReportReason(e.target.value)}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-3 border-t p-4">
+                  <Button
+                    variant="outline"
+                    className="flex-1 rounded-lg"
+                    onClick={closeReportModal}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    className="flex-1 rounded-lg"
+                    onClick={handleReport}
+                    disabled={!reportReason || reportLoading || (reportReason === "Other" && !otherReportReason.trim())}
+                  >
+                    {reportLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Flag className="h-4 w-4" />}
+                    Submit
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-col items-center justify-center p-8 space-y-4">
+                <h3 className="text-xl font-bold text-center">Report Submitted</h3>
+                <p className="text-sm text-muted-foreground text-center mb-4">Would you also like to block this user?</p>
+                <div className="flex gap-4 w-full">
+                  <Button
+                    variant="outline"
+                    className="flex-1 rounded-lg"
+                    onClick={closeReportModal}
+                  >
+                    Show Profile
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    className="flex-1 rounded-lg"
+                    onClick={() => {
+                      if (reportModal.targetId) handleBlock(reportModal.targetId)
+                      closeReportModal()
+                    }}
+                  >
+                    <Ban className="w-4 h-4 mr-2" />
+                    Block User
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
       </MotionModal>
 

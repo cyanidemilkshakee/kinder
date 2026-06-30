@@ -289,11 +289,7 @@ export default function OnboardingPage() {
       }
     }
 
-    if (!hasAuthPassword) {
-      router.push('/settings?setupPassword=1')
-    } else {
-      router.push('/discover')
-    }
+    router.push('/discover')
   }
 
   const StepIcon = STEPS[step - 1].icon

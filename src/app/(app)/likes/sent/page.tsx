@@ -1,9 +1,8 @@
-/* eslint-disable */
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Ban, Flag, Heart, Loader2, Send, Star, X } from "lucide-react"
+import { Ban, Flag, Loader2, Send, X } from "lucide-react"
 import { AnimatedSegmentedControl } from "@/components/AnimatedSegmentedControl"
 import { MotionModal } from "@/components/MotionModal"
 import { ProfilePostCard, type ProfileSwipeDirection } from "@/components/ProfilePostCard"
@@ -43,11 +42,7 @@ type ReportModal = {
 }
 
 type Toast = { msg: string; type: "success" | "error" | "info" }
-
-type TouchPoint = {
-  x: number
-  y: number
-}
+type TouchPoint = { x: number; y: number }
 
 const REPORT_REASONS = [
   "Fake profile / Impersonation",
@@ -62,7 +57,7 @@ function profileHasIntent(profile: Liker, intent: RelationshipIntent) {
   return normalizeRelationshipIntents(profile.relationship_intents, profile.relationship_intent).includes(intent)
 }
 
-export default function LikesPage() {
+export default function SentLikesPage() {
   const [likers, setLikers] = useState<Liker[]>([])
   const [activeIntent, setActiveIntent] = useState<RelationshipIntent>("friendship")
   const [loading, setLoading] = useState(true)
@@ -72,7 +67,6 @@ export default function LikesPage() {
   const [swipeDirection, setSwipeDirection] = useState<ProfileSwipeDirection | null>(null)
   const [touchStart, setTouchStart] = useState<TouchPoint | null>(null)
   const [activePhotoIndex, setActivePhotoIndex] = useState(0)
-  const [matchModal, setMatchModal] = useState<{ open: boolean; matchedUser: Liker | null; matchId: string | null }>({ open: false, matchedUser: null, matchId: null })
   const [reportModal, setReportModal] = useState<ReportModal>({ open: false, targetId: null, targetName: "", step: "reason" })
   const [reportReason, setReportReason] = useState("")
   const [otherReportReason, setOtherReportReason] = useState("")
@@ -102,7 +96,7 @@ export default function LikesPage() {
         .select("id, username, real_name, department, year, gender, bio, relationship_intent, relationship_intents, avatar_url, photos, interest_tags, food_preference, drinking_habit, smoking_habit, gender_preferences")
         .eq("id", user.id)
         .single(),
-      supabase.rpc("get_pending_likers", { viewer_id: user.id })
+      supabase.rpc("get_profiles_i_liked", { viewer_id: user.id })
     ])
 
     if (myProfileRes.data) {
@@ -150,51 +144,20 @@ export default function LikesPage() {
     count: groupedLikers[intent.value].length,
   }))
 
-  const handleSwipe = async (
-    isRight: boolean,
-    direction: ProfileSwipeDirection = isRight ? "right" : "left",
-  ) => {
+  const handleUnlike = async () => {
     if (!current || !currentUserId || swipingId) return
 
     setSwipingId(current.id)
-    setSwipeDirection(direction)
+    setSwipeDirection("left")
     await new Promise((resolve) => setTimeout(resolve, 350))
     setSwipingId(null)
     setSwipeDirection(null)
     setActivePhotoIndex(0)
     setLikers((prev) => prev.filter((profile) => profile.id !== current.id))
 
-    await supabase.from("swipes").insert({
-      swiper_id: currentUserId,
-      swiped_id: current.id,
-      is_right_swipe: isRight,
-      relationship_intent: activeIntent,
-    })
-
-    if (isRight) {
-      const user1_id = currentUserId < current.id ? currentUserId : current.id
-      const user2_id = currentUserId < current.id ? current.id : currentUserId
-
-      const { data: match } = await supabase
-        .from("matches")
-        .insert({ user1_id, user2_id })
-        .select("id")
-        .single()
-
-      if (match) {
-        setMatchModal({ open: true, matchedUser: current, matchId: match.id })
-      }
-    }
-  }
-
-  const handleSuperLike = async (direction: ProfileSwipeDirection = "up") => {
-    if (!current || !currentUserId) return
-
-    await supabase.from("super_likes").insert({
-      sender_id: currentUserId,
-      receiver_id: current.id,
-    })
-    await handleSwipe(true, direction)
+    await supabase.from("swipes").delete()
+      .eq("swiper_id", currentUserId)
+      .eq("swiped_id", current.id)
   }
 
   const handleReport = async (e: React.FormEvent) => {
@@ -237,15 +200,6 @@ export default function LikesPage() {
     }
   }
 
-  const closeMatchModal = (openChat = false) => {
-    const matchId = matchModal.matchId
-    setMatchModal((prev) => ({ ...prev, open: false }))
-    window.setTimeout(() => {
-      setMatchModal({ open: false, matchedUser: null, matchId: null })
-      if (openChat && matchId) router.push(`/chat/${matchId}`)
-    }, 180)
-  }
-
   const closeReportModal = () => {
     if (!reportModal.open) return
     setTimeout(() => {
@@ -257,25 +211,16 @@ export default function LikesPage() {
 
   const handleCardSwipeCommit = (direction: ProfileSwipeDirection) => {
     if (!current) return
-
-    if (direction === "right") {
-      void handleSwipe(true, "right")
-      return
-    }
-
     if (direction === "left") {
-      void handleSwipe(false, "left")
+      void handleUnlike()
       return
     }
-
-    if (direction === "up") {
-      if (window.confirm(`Super like ${current.real_name}?`)) {
-        void handleSuperLike("up")
-      }
+    if (direction === "right" || direction === "up") {
+      // Restore card position as we don't have right/up swipe actions here
+      setSwipingId(null)
+      setSwipeDirection(null)
       return
     }
-
-    setReportModal({ open: true, targetId: current.id, targetName: current.real_name, step: "reason" })
   }
 
   const handleNextPhoto = (event: React.MouseEvent) => {
@@ -318,19 +263,10 @@ export default function LikesPage() {
     if (Math.max(absX, absY) < threshold) return
 
     if (absX >= absY) {
-      handleSwipe(deltaX > 0, deltaX > 0 ? "right" : "left")
-      return
-    }
-
-    if (deltaY < 0) {
-      if (window.confirm(`Super like ${current.real_name}?`)) {
-        handleSuperLike("up")
+      if (deltaX < 0) {
+        void handleUnlike()
       }
       return
-    }
-
-    if (window.confirm(`Report ${current.real_name}?`)) {
-      setReportModal({ open: true, targetId: current.id, targetName: current.real_name, step: "reason" })
     }
   }
 
@@ -354,8 +290,8 @@ export default function LikesPage() {
       <div className="flex-shrink-0 pb-3">
         <div className="flex flex-col gap-4">
           <div>
-            <h1 className="text-2xl font-extrabold tracking-tight">People Who Liked You</h1>
-            <p className="text-sm text-muted-foreground">{likers.length} total pending likes</p>
+            <h1 className="text-2xl font-extrabold tracking-tight">Profiles You Liked</h1>
+            <p className="text-sm text-muted-foreground">Review the people you have liked.</p>
           </div>
 
           <AnimatedSegmentedControl
@@ -377,30 +313,12 @@ export default function LikesPage() {
             <div className="hidden flex-col items-center gap-4 md:flex">
               <button
                 type="button"
-                onClick={() => handleSwipe(false, "left")}
+                onClick={handleUnlike}
                 className="flex size-16 items-center justify-center rounded-full border-2 border-destructive bg-background text-destructive shadow-lg transition hover:scale-105 hover:bg-destructive hover:text-black active:scale-95"
-                aria-label="Pass"
-                title="Pass"
+                aria-label="Unlike"
+                title="Unlike"
               >
                 <X className="h-8 w-8" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setReportModal({ open: true, targetId: current.id, targetName: current.real_name, step: "reason" })}
-                className="flex size-12 mt-2 items-center justify-center rounded-full border border-destructive/40 bg-background text-destructive shadow-md transition hover:scale-105 hover:bg-destructive/10 active:scale-95"
-                aria-label="Report"
-                title="Report"
-              >
-                <Flag className="h-5 w-5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => handleBlock(current.id)}
-                className="flex size-12 mt-2 items-center justify-center rounded-full border border-destructive/40 bg-background text-destructive shadow-md transition hover:scale-105 hover:bg-destructive/10 active:scale-95"
-                aria-label="Block"
-                title="Block"
-              >
-                <Ban className="h-5 w-5" />
               </button>
             </div>
 
@@ -423,21 +341,21 @@ export default function LikesPage() {
             <div className="hidden flex-col items-center gap-4 md:flex">
               <button
                 type="button"
-                onClick={() => handleSwipe(true, "right")}
-                className="flex size-16 items-center justify-center rounded-full border-2 border-primary bg-background text-primary shadow-lg transition hover:scale-105 hover:bg-primary hover:text-primary-foreground active:scale-95"
-                aria-label="Like back"
-                title="Like back"
+                onClick={() => setReportModal({ open: true, targetId: current.id, targetName: current.real_name, step: "reason" })}
+                className="flex size-12 items-center justify-center rounded-full border border-destructive/40 bg-background text-destructive shadow-md transition hover:scale-105 hover:bg-destructive/10 active:scale-95"
+                aria-label="Report"
+                title="Report"
               >
-                <Heart className="h-8 w-8" />
+                <Flag className="h-5 w-5" />
               </button>
               <button
                 type="button"
-                onClick={() => handleSuperLike("up")}
-                className="flex size-12 mt-2 items-center justify-center rounded-full border border-primary/40 bg-background text-primary shadow-md transition hover:scale-105 hover:bg-primary/10 active:scale-95"
-                aria-label="Super like"
-                title="Super like"
+                onClick={() => handleBlock(current.id)}
+                className="flex size-12 mt-2 items-center justify-center rounded-full border border-destructive/40 bg-background text-destructive shadow-md transition hover:scale-105 hover:bg-destructive/10 active:scale-95"
+                aria-label="Block"
+                title="Block"
               >
-                <Star className="h-5 w-5" />
+                <Ban className="h-5 w-5" />
               </button>
               <button
                 type="button"
@@ -452,12 +370,9 @@ export default function LikesPage() {
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center p-8 text-center">
-            <div className="mb-4 flex size-16 items-center justify-center rounded-full bg-muted">
-              <Heart className="h-8 w-8 text-primary/50" />
-            </div>
-            <h3 className="text-lg font-bold">You're all caught up here</h3>
+            <h3 className="text-lg font-bold">No sent likes</h3>
             <p className="mt-2 max-w-xs text-sm text-muted-foreground">
-              No pending {formatRelationshipIntent(activeIntent).toLowerCase()} likes. Check the other group or keep discovering.
+              You haven't liked anyone for {formatRelationshipIntent(activeIntent).toLowerCase()} yet.
             </p>
             <Button className="mt-5 rounded-lg" onClick={() => router.push("/discover")}>
               Go to Discover
@@ -465,51 +380,6 @@ export default function LikesPage() {
           </div>
         )}
       </div>
-
-      <MotionModal
-        open={matchModal.open && !!matchModal.matchedUser}
-        className="bg-black/70"
-        panelClassName="w-full max-w-sm overflow-hidden rounded-lg border bg-background"
-      >
-        {matchModal.matchedUser && (
-          <>
-            <div className="flex flex-col items-center bg-muted/40 p-8 pb-4">
-              <div className="relative">
-                <div className="absolute inset-0 rounded-full bg-primary/30 animate-pulse-ring" />
-                <div className="relative z-10 size-24 overflow-hidden rounded-full border-4 border-primary">
-                  <img
-                    src={matchModal.matchedUser.avatar_url || `https://api.dicebear.com/9.x/micah/svg?seed=${matchModal.matchedUser.id}`}
-                    alt={matchModal.matchedUser.real_name}
-                    className="h-full w-full object-cover"
-                  />
-                </div>
-              </div>
-              <p className="mt-4 text-3xl font-extrabold tracking-tight">It's a Match!</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                You matched with <span className="font-semibold text-foreground">{matchModal.matchedUser.real_name}</span>.
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-3 p-6">
-              <Button
-                className="w-full rounded-lg"
-                onClick={() => {
-                  closeMatchModal(true)
-                }}
-              >
-                Start Chatting
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full rounded-lg"
-                onClick={() => closeMatchModal()}
-              >
-                Keep Reviewing Likes
-              </Button>
-            </div>
-          </>
-        )}
-      </MotionModal>
 
       <MotionModal
         open={reportModal.open}

@@ -48,7 +48,7 @@
 
 /* ── LIGHT MODE ── Clean neutral palette */
 :root {
-  --background: #F9F9F9;
+  --background: #f2f2f2;
   --foreground: #111111;
   --popover: #FFFFFF;
   --popover-foreground: #111111;
@@ -71,7 +71,7 @@
   --chart-4: #EBC2C3;
   --chart-5: #A46F70;
   /* Sidebar - Coral Sunset (light) — unchanged */
-  --sidebar: #B23C3C;
+  --sidebar: #e63948;
   --sidebar-foreground: #ffffff;
   --sidebar-primary: #FFD700;    /* Goldflare - active/primary accent */
   --sidebar-primary-foreground: #111111;
@@ -83,7 +83,7 @@
 
 /* ── DARK MODE ── Charcoal Grey palette */
 .dark {
-  --background: #000000;         /* Solid Black */
+  --background: #1c1c1c;
   --foreground: #F5F5F5;
   --popover: #2D2D2D;
   --popover-foreground: #F5F5F5;
@@ -105,7 +105,7 @@
   --chart-4: #373737;
   --chart-5: #ECF0F1;
   /* Sidebar - Coral Sunset (dark) */
-  --sidebar: #B23C3C;
+  --sidebar: #e63948;
   --sidebar-foreground: #ffffff;
   --sidebar-primary: #FFD700;    /* Goldflare - active/primary accent */
   --sidebar-primary-foreground: #111111;

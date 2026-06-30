@@ -292,7 +292,7 @@ export function ProfilePostCard({
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] font-normal leading-relaxed text-foreground">
               <span className={`inline-flex items-center gap-1.5 ${sharedFoodPreference ? "font-semibold text-primary" : ""}`}>
                 <Utensils className={`size-4 ${sharedFoodPreference ? "text-primary" : "text-muted-foreground"}`} aria-hidden="true" />
-                Food: {formatHabit(profile.food_preference)}
+                {formatHabit(profile.food_preference)}
               </span>
               <span className={`inline-flex items-center gap-1.5 ${sharedDrinkingHabit ? "font-semibold text-primary" : ""}`} title="Drinking">
                 <Wine className={`size-4 ${sharedDrinkingHabit ? "text-primary" : "text-muted-foreground"}`} aria-hidden="true" />

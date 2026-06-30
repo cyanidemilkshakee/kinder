@@ -1,3 +1,14 @@
+-- Final consolidated Kinder schema
+-- Generated from:
+-- - C:\Users\movva\Documents\GitHub\kinder-admin\schema.sql
+-- - C:\Users\movva\Documents\GitHub\kinder-admin\schema-v2.sql
+-- - C:\Users\movva\Documents\GitHub\kinder\schema.sql
+--
+-- Notes:
+-- - Uses the latest kinder/schema.sql as the base because it supersedes the older admin schema.
+-- - Removes the duplicated malformed tail in kinder/schema.sql.
+-- - Applies kinder-admin/schema-v2.sql last, so admin allowlist signup hardening is the active handle_new_user() behavior.
+
 -- Campus Dating App Schema (Consolidated & Idempotent)
 
 -- Enable UUID extension
@@ -23,6 +34,7 @@ create table if not exists public.profiles (
   role text default 'user',
   ban_expires_at timestamp with time zone,
   is_suspended boolean default false,
+  suspension_reason text,
   interest_tags text[],
   food_preference text default 'No preference',
   drinking_habit text default 'Prefer not to say',
@@ -45,6 +57,7 @@ create table if not exists public.swipes (
   swiper_id uuid references public.profiles on delete cascade not null,
   swiped_id uuid references public.profiles on delete cascade not null,
   is_right_swipe boolean not null,
+  relationship_intent text,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   unique(swiper_id, swiped_id)
 );
@@ -283,7 +296,8 @@ alter table public.profiles
   add column if not exists username text,
   add column if not exists has_password boolean default false not null,
   add column if not exists read_receipts_enabled boolean default true not null,
-  add column if not exists last_seen_at timestamp with time zone default timezone('utc'::text, now()) not null;
+  add column if not exists last_seen_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  add column if not exists suspension_reason text;
 
 alter table public.profiles
   drop column if exists hookup_opt_in,
@@ -335,7 +349,9 @@ as $$
 declare
   acting_user uuid := (select auth.uid());
 begin
-  if acting_user is null or new.sender_id is distinct from acting_user then
+  if current_setting('request.jwt.claims', true)::jsonb->>'role' = 'service_role' then
+    null; -- allow admin API to send messages
+  elsif acting_user is null or new.sender_id is distinct from acting_user then
     raise exception 'Messages must be sent by the authenticated user';
   end if;
 
@@ -616,6 +632,7 @@ begin
 
     if new.role is distinct from old.role
       or new.is_suspended is distinct from old.is_suspended
+      or new.suspension_reason is distinct from old.suspension_reason
       or new.ban_expires_at is distinct from old.ban_expires_at then
       raise exception 'Moderation fields cannot be changed by users';
     end if;
@@ -668,6 +685,10 @@ begin
   new.user1_id := first_user;
   new.user2_id := second_user;
 
+  if current_setting('request.jwt.claims', true)::jsonb->>'role' = 'service_role' then
+    return new; -- allow admin API to create matches directly
+  end if;
+  
   if acting_user not in (new.user1_id, new.user2_id) then
     raise exception 'Users can only create their own matches';
   end if;
@@ -1083,7 +1104,12 @@ grant update (
   super_likes_today,
   super_likes_reset_at
 ) on table public.profiles to authenticated;
-grant select, insert on table public.swipes to authenticated;
+grant select, insert, delete on table public.swipes to authenticated;
+drop policy if exists "Users can delete their own swipes" on swipes;
+create policy "Users can delete their own swipes" on swipes for delete
+to authenticated
+using ((select auth.uid()) = swiper_id or (select auth.uid()) = swiped_id);
+
 grant select, insert, delete on table public.matches to authenticated;
 grant insert on table public.reports to authenticated;
 grant select, insert on table public.super_likes to authenticated;
@@ -1199,135 +1225,8 @@ with check (
 );
 
 
--- TRIGGERS & FUNCTIONS
 
--- Function to handle new user signup
-create or replace function public.handle_new_user()
-returns trigger as $$
-declare
-  selected_intent text;
-begin
-  selected_intent := case
-    when coalesce(new.raw_user_meta_data->>'relationship_intent', 'friendship') = 'dating' then 'dating'
-    else 'friendship'
-  end;
-
-  insert into public.profiles (id, email, username, has_password, real_name, department, year, gender, relationship_intent, relationship_intents)
-  values (
-    new.id, 
-    new.email,
-    nullif(
-      lower(regexp_replace(coalesce(new.raw_user_meta_data->>'username', ''), '[^a-z0-9_]', '_', 'g')),
-      ''
-    ),
-    coalesce((new.raw_user_meta_data->>'has_password')::boolean, false),
-    coalesce(new.raw_user_meta_data->>'full_name', coalesce(new.raw_user_meta_data->>'real_name', '')),
-    coalesce(new.raw_user_meta_data->>'department', ''),
-    coalesce(new.raw_user_meta_data->>'year', ''),
-    coalesce(new.raw_user_meta_data->>'gender', ''),
-    selected_intent,
-    array[selected_intent]
-  );
-  return new;
-end;
-$$ language plpgsql security definer;
-
-drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created
-  after insert on auth.users
-  for each row execute procedure public.handle_new_user();
-
--- Trigger to enforce email domain has been removed to allow any email
-drop trigger if exists ensure_valid_email on auth.users;
-drop function if exists public.validate_user_email();
-
--- Moderation report threshold trigger
-create or replace function public.handle_report_thresholds()
-returns trigger as $$
-declare
-  report_count int;
-begin
-  select count(*) into report_count
-  from public.reports
-  where reported_id = new.reported_id
-    and status != 'action_taken';
-
-  -- 3 reports -> 7-day restriction
-  if report_count = 3 then
-    update public.profiles
-      set ban_expires_at = now() + interval '7 days'
-      where id = new.reported_id;
-  end if;
-
-  -- 5+ reports -> permanent suspension (manual review to lift)
-  if report_count >= 5 then
-    update public.profiles
-      set is_suspended = true,
-      ban_expires_at = null
-      where id = new.reported_id;
-  end if;
-
-
--- Private chat media is readable only by participants in the matching conversation.
-drop policy if exists "Matched users can read chat media" on storage.objects;
-create policy "Matched users can read chat media" on storage.objects for select
-to authenticated
-using (
-  bucket_id = 'chat-media'
-  and exists (
-    select 1 from public.matches
-    where (storage.foldername(name))[1] = matches.id::text
-      and (user1_id = (select auth.uid()) or user2_id = (select auth.uid()))
-  )
-);
-
-drop policy if exists "Matched users can upload chat media" on storage.objects;
-create policy "Matched users can upload chat media" on storage.objects for insert
-to authenticated
-with check (
-  bucket_id = 'chat-media'
-  and owner_id = (select auth.uid())::text
-  and exists (
-    select 1 from public.matches
-    where (storage.foldername(name))[1] = matches.id::text
-      and (user1_id = (select auth.uid()) or user2_id = (select auth.uid()))
-  )
-);
-
-drop policy if exists "Users can delete their chat media" on storage.objects;
-create policy "Users can delete their chat media" on storage.objects for delete
-to authenticated
-using (
-  bucket_id = 'chat-media'
-  and owner_id = (select auth.uid())::text
-);
-
--- Private Broadcast and Presence topics are named match:<match uuid>.
-drop policy if exists "Matched users can receive private chat realtime" on realtime.messages;
-create policy "Matched users can receive private chat realtime" on realtime.messages for select
-to authenticated
-using (
-  realtime.messages.extension in ('broadcast', 'presence')
-  and exists (
-    select 1 from public.matches
-    where 'match:' || matches.id::text = (select realtime.topic())
-      and (user1_id = (select auth.uid()) or user2_id = (select auth.uid()))
-  )
-);
-
-drop policy if exists "Matched users can send private chat realtime" on realtime.messages;
-create policy "Matched users can send private chat realtime" on realtime.messages for insert
-to authenticated
-with check (
-  realtime.messages.extension in ('broadcast', 'presence')
-  and exists (
-    select 1 from public.matches
-    where 'match:' || matches.id::text = (select realtime.topic())
-      and (user1_id = (select auth.uid()) or user2_id = (select auth.uid()))
-  )
-);
-
-
+-- Complete triggers and RPC section from kinder/schema.sql
 -- TRIGGERS & FUNCTIONS
 
 -- Function to handle new user signup
@@ -1470,3 +1369,132 @@ as $$
       select blocker_id from public.blocks where blocked_id = viewer_id
     );
 $$;
+
+create or replace function public.get_profiles_i_liked(viewer_id uuid)
+returns setof public.profiles
+language sql
+security definer
+as $$
+  select p.*
+  from public.profiles p
+  join public.swipes s on s.swiped_id = p.id
+  where s.swiper_id = viewer_id
+    and s.is_right_swipe = true
+    and not exists (
+      select 1 from public.matches m 
+      where (m.user1_id = viewer_id and m.user2_id = p.id) 
+         or (m.user1_id = p.id and m.user2_id = viewer_id)
+    )
+    and p.id not in (
+      select blocked_id from public.blocks where blocker_id = viewer_id
+      union
+      select blocker_id from public.blocks where blocked_id = viewer_id
+    );
+$$;
+
+-- Carry-forward item present in kinder-admin/schema.sql only
+create index if not exists profiles_role_created_at_idx on public.profiles (role, created_at desc);
+
+
+-- Requested swipes relationship intent migration
+alter table public.swipes
+add column if not exists relationship_intent text;
+
+
+-- Shared user/admin app extras
+-- Normal user signup remains enabled. No signup path assigns role = 'admin'.
+-- Make your own existing account admin manually after signup, then leave role changes locked down.
+begin;
+
+-- Admin display pictures are stored separately from private chat media.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'profile-avatars',
+  'profile-avatars',
+  true,
+  5242880,
+  array['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+)
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "Users can read profile avatars" on storage.objects;
+create policy "Users can read profile avatars" on storage.objects for select
+to public
+using (bucket_id = 'profile-avatars');
+
+drop policy if exists "Users can upload own profile avatar" on storage.objects;
+create policy "Users can upload own profile avatar" on storage.objects for insert
+to authenticated
+with check (
+  bucket_id = 'profile-avatars'
+  and owner_id = (select auth.uid())::text
+  and (storage.foldername(name))[1] = (select auth.uid())::text
+);
+
+drop policy if exists "Users can update own profile avatar" on storage.objects;
+create policy "Users can update own profile avatar" on storage.objects for update
+to authenticated
+using (
+  bucket_id = 'profile-avatars'
+  and owner_id = (select auth.uid())::text
+  and (storage.foldername(name))[1] = (select auth.uid())::text
+)
+with check (
+  bucket_id = 'profile-avatars'
+  and owner_id = (select auth.uid())::text
+  and (storage.foldername(name))[1] = (select auth.uid())::text
+);
+
+drop policy if exists "Users can delete own profile avatar" on storage.objects;
+create policy "Users can delete own profile avatar" on storage.objects for delete
+to authenticated
+using (
+  bucket_id = 'profile-avatars'
+  and owner_id = (select auth.uid())::text
+  and (storage.foldername(name))[1] = (select auth.uid())::text
+);
+
+alter table public.support_messages
+  add column if not exists user_id uuid;
+
+update public.support_messages support
+set user_id = null
+where user_id is not null
+  and not exists (
+    select 1
+    from public.profiles profile
+    where profile.id = support.user_id
+  );
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'support_messages_user_id_fkey'
+      and conrelid = 'public.support_messages'::regclass
+  ) then
+    alter table public.support_messages
+      add constraint support_messages_user_id_fkey
+      foreign key (user_id)
+      references public.profiles(id)
+      on delete set null;
+  end if;
+end;
+$$;
+
+create index if not exists support_messages_user_id_idx
+  on public.support_messages (user_id);
+
+notify pgrst, 'reload schema';
+
+
+-- Sole-admin bootstrap template. Replace the email and run this once after your account exists.
+-- update public.profiles
+-- set role = 'admin'
+-- where lower(email) = lower('your-email@example.com');
+
+commit;

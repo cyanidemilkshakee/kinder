@@ -24,7 +24,7 @@ export async function GET(request: Request) {
       if (user) {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('real_name, username, has_password, role, is_suspended, ban_expires_at')
+          .select('real_name, username, has_password, role, is_suspended, ban_expires_at, suspension_reason')
           .eq('id', user.id)
           .single()
           
@@ -37,7 +37,13 @@ export async function GET(request: Request) {
         }
 
         if (isRestricted) {
-          return NextResponse.redirect(`${origin}/suspended`)
+          await supabase.auth.signOut()
+          const searchParams = new URLSearchParams()
+          if (profile?.suspension_reason) {
+            searchParams.set('reason', profile.suspension_reason)
+          }
+          const queryString = searchParams.toString() ? `?${searchParams.toString()}` : ''
+          return NextResponse.redirect(`${origin}/suspended${queryString}`)
         }
 
         if (!profile || !profile.real_name || !profile.username) {

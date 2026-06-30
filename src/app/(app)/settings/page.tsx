@@ -41,6 +41,8 @@ function SettingsContent() {
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
+  
+  const [blockedUsers, setBlockedUsers] = useState<any[]>([])
 
   const supabase = createClient()
   const searchParams = useSearchParams()
@@ -68,6 +70,15 @@ function SettingsContent() {
 
       if (error) throw error
       setSettings(data)
+
+      const { data: blocksData } = await supabase
+        .from("blocks")
+        .select("id, blocked_id, blocked:profiles!blocks_blocked_id_fkey(real_name, username, avatar_url)")
+        .eq("blocker_id", user.id)
+
+      if (blocksData) {
+        setBlockedUsers(blocksData as any)
+      }
     } catch (error: any) {
       console.error("Error fetching settings:", error?.message ?? error)
     } finally {
@@ -176,6 +187,23 @@ function SettingsContent() {
       showToast(message, "error")
     } finally {
       setPasswordSaving(false)
+    }
+  }
+
+  const handleUnblock = async (blockedId: string) => {
+    setSaving(true)
+    const { error } = await supabase
+      .from("blocks")
+      .delete()
+      .eq("blocker_id", settings?.id)
+      .eq("blocked_id", blockedId)
+    
+    setSaving(false)
+    if (!error) {
+      showToast("User unblocked.", "success")
+      setBlockedUsers((prev) => prev.filter(u => u.blocked_id !== blockedId))
+    } else {
+      showToast("Failed to unblock user.", "error")
     }
   }
 
@@ -399,6 +427,31 @@ function SettingsContent() {
                   />
                 </div>
 
+              </section>
+
+              {/* Blocked Users */}
+              <section className="space-y-4">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground border-b border-border/50 pb-2">Blocked Users</h3>
+                <div className="space-y-3">
+                  {blockedUsers.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">You haven't blocked anyone.</p>
+                  ) : (
+                    blockedUsers.map((b) => (
+                      <div key={b.id} className="flex items-center justify-between p-3 rounded-xl border bg-card">
+                        <div className="flex items-center gap-3">
+                          <img src={b.blocked?.avatar_url || `https://api.dicebear.com/9.x/micah/svg?seed=${b.blocked_id}`} alt="avatar" className="size-10 rounded-full bg-muted object-cover" />
+                          <div>
+                            <p className="font-semibold text-sm">{b.blocked?.real_name || "Unknown"}</p>
+                            <p className="text-xs text-muted-foreground">@{b.blocked?.username || "unknown"}</p>
+                          </div>
+                        </div>
+                        <Button variant="outline" size="sm" className="rounded-xl" onClick={() => handleUnblock(b.blocked_id)}>
+                          Unblock
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
               </section>
 
               {/* Interested In */}

@@ -44,6 +44,17 @@ export default function ConfessionsPage() {
     }
   }, [activeTab])
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search)
+      const toParam = params.get("to")
+      if (toParam) {
+        setReceiverUsername(toParam)
+        setActiveTab("send")
+      }
+    }
+  }, [])
+
   async function fetchConfessions() {
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()

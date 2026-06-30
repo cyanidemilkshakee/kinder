@@ -40,6 +40,7 @@ export function useProfileDeck<TProfile extends { id: string; real_name: string;
     targetName: "",
   })
   const [reportReason, setReportReason] = useState("")
+  const [otherReportReason, setOtherReportReason] = useState("")
   const [reportLoading, setReportLoading] = useState(false)
 
   const handleSwipe = useCallback(
@@ -155,10 +156,11 @@ export function useProfileDeck<TProfile extends { id: string; real_name: string;
   }, [touchStart, currentProfile, handleSwipe])
 
   const submitReport = useCallback(async () => {
-    if (!reportReason || !reportModal.targetId) return
+    const finalReason = reportReason === "Other" ? `Other: ${otherReportReason.trim()}` : reportReason
+    if (!reportReason || !reportModal.targetId || (reportReason === "Other" && !otherReportReason.trim())) return
     
     setReportLoading(true)
-    const { success } = await onReport(reportModal.targetId, reportReason)
+    const { success } = await onReport(reportModal.targetId, finalReason)
     setReportLoading(false)
     
     if (success) {
@@ -169,8 +171,9 @@ export function useProfileDeck<TProfile extends { id: string; real_name: string;
     window.setTimeout(() => {
       setReportModal({ open: false, targetId: null, targetName: "" })
       setReportReason("")
+      setOtherReportReason("")
     }, 180)
-  }, [reportReason, reportModal.targetId, onReport, onSwipeComplete, currentProfile])
+  }, [reportReason, otherReportReason, reportModal.targetId, onReport, onSwipeComplete, currentProfile])
 
   const closeMatchModal = useCallback((onClose?: (matchId: string) => void) => {
     const matchId = matchModal.matchId
@@ -182,12 +185,14 @@ export function useProfileDeck<TProfile extends { id: string; real_name: string;
   }, [matchModal.matchId])
 
   const closeReportModal = useCallback(() => {
+    if (!reportModal.open) return
     setReportModal((prev) => ({ ...prev, open: false }))
     window.setTimeout(() => {
       setReportModal({ open: false, targetId: null, targetName: "" })
       setReportReason("")
+      setOtherReportReason("")
     }, 180)
-  }, [])
+  }, [reportModal.open])
 
   return {
     swipingId,
@@ -198,6 +203,8 @@ export function useProfileDeck<TProfile extends { id: string; real_name: string;
     reportModal,
     reportReason,
     setReportReason,
+    otherReportReason,
+    setOtherReportReason,
     reportLoading,
     handleCardSwipeCommit,
     handleNextPhoto,

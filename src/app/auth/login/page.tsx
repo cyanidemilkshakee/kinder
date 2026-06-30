@@ -41,7 +41,7 @@ function AuthForm({ initialView }: { initialView: "login" | "signup" }) {
       if (user) {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('real_name, username, has_password, role, is_suspended, ban_expires_at')
+          .select('real_name, username, has_password, role, is_suspended, ban_expires_at, suspension_reason')
           .eq('id', user.id)
           .maybeSingle()
 
@@ -53,11 +53,17 @@ function AuthForm({ initialView }: { initialView: "login" | "signup" }) {
           setError("This account cannot use the student dashboard.")
           setCheckingSession(false)
         } else if (isRestricted) {
-          router.replace('/suspended')
+          await supabase.auth.signOut()
+          const reasonText = profile?.suspension_reason ? ` Reason: ${profile.suspension_reason}` : ''
+          if (profile?.ban_expires_at) {
+            const daysLeft = Math.ceil((new Date(profile.ban_expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+            setError(`Your account has been suspended for ${daysLeft} day${daysLeft === 1 ? '' : 's'}.${reasonText}`)
+          } else {
+            setError(`Your account has been suspended.${reasonText}`)
+          }
+          setCheckingSession(false)
         } else if (!profile?.real_name || !profile?.username) {
           router.replace('/onboarding')
-        } else if (!profile.has_password) {
-          router.replace('/settings?setupPassword=1')
         } else {
           router.replace('/discover')
         }
@@ -152,7 +158,7 @@ function AuthForm({ initialView }: { initialView: "login" | "signup" }) {
       } else {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('real_name, username, has_password, role, is_suspended, ban_expires_at')
+          .select('real_name, username, has_password, role, is_suspended, ban_expires_at, suspension_reason')
           .eq('id', data.user?.id)
           .single()
 
@@ -165,11 +171,18 @@ function AuthForm({ initialView }: { initialView: "login" | "signup" }) {
           setLoading(false)
           return
         } else if (isRestricted) {
-          router.push('/suspended')
+          await supabase.auth.signOut()
+          const reasonText = profile?.suspension_reason ? ` Reason: ${profile.suspension_reason}` : ''
+          if (profile?.ban_expires_at) {
+            const daysLeft = Math.ceil((new Date(profile.ban_expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+            setError(`Your account has been suspended for ${daysLeft} day${daysLeft === 1 ? '' : 's'}.${reasonText}`)
+          } else {
+            setError(`Your account has been suspended.${reasonText}`)
+          }
+          setLoading(false)
+          return
         } else if (!profile || !profile.real_name || !profile.username) {
           router.push('/onboarding')
-        } else if (!profile.has_password) {
-          router.push('/settings?setupPassword=1')
         } else {
           router.push('/discover')
         }

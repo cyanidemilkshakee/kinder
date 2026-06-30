@@ -18,6 +18,8 @@ type DeckModalsProps<TProfile extends { id: string; real_name: string; photos?: 
   closeReportModal: () => void
   reportReason: string
   setReportReason: (reason: string) => void
+  otherReportReason: string
+  setOtherReportReason: (reason: string) => void
   reportLoading: boolean
   submitReport: () => void
   reportReasons: string[]
@@ -30,6 +32,8 @@ export function DeckModals<TProfile extends { id: string; real_name: string; pho
   closeReportModal,
   reportReason,
   setReportReason,
+  otherReportReason,
+  setOtherReportReason,
   reportLoading,
   submitReport,
   reportReasons,
@@ -87,26 +91,38 @@ export function DeckModals<TProfile extends { id: string; real_name: string; pho
         open={reportModal.open}
         placement="bottom"
         className="bg-black/60"
-        panelClassName="w-full max-w-sm overflow-hidden rounded-lg border bg-background"
+        panelClassName="w-full max-w-md overflow-hidden rounded-lg border bg-background"
       >
         <div>
           <div className="border-b p-5">
             <h3 className="text-lg font-bold">Report {reportModal.targetName}</h3>
             <p className="mt-1 text-sm text-muted-foreground">Help keep Kinder safe. Select a reason:</p>
           </div>
-          <div className="flex max-h-64 flex-col gap-2 overflow-y-auto p-4">
+          <div className="flex max-h-96 flex-col gap-2 overflow-y-auto p-4">
             {reportReasons.map((reason) => (
-              <button
-                key={reason}
-                onClick={() => setReportReason(reason)}
-                className={`w-full rounded-lg border px-4 py-2.5 text-left text-sm transition-all ${
-                  reportReason === reason
-                    ? "border-destructive/50 bg-destructive/10 font-medium text-foreground"
-                    : "border-border bg-background hover:bg-muted/50"
-                }`}
-              >
-                {reason}
-              </button>
+              <div key={reason}>
+                <button
+                  onClick={() => setReportReason(reason)}
+                  className={`w-full rounded-lg border px-4 py-2.5 text-left text-sm transition-all ${
+                    reportReason === reason
+                      ? "border-destructive/50 bg-destructive/10 font-medium text-foreground"
+                      : "border-border bg-background hover:bg-muted/50"
+                  }`}
+                >
+                  {reason}
+                </button>
+                {reason === "Other" && reportReason === "Other" && (
+                  <div className="mt-2">
+                    <textarea
+                      className="w-full resize-none rounded-lg border border-border bg-background p-3 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                      placeholder="Please specify the reason..."
+                      rows={3}
+                      value={otherReportReason}
+                      onChange={(e) => setOtherReportReason(e.target.value)}
+                    />
+                  </div>
+                )}
+              </div>
             ))}
           </div>
           <div className="flex gap-3 border-t p-4">
@@ -121,7 +137,7 @@ export function DeckModals<TProfile extends { id: string; real_name: string; pho
               variant="destructive"
               className="flex-1 rounded-lg"
               onClick={submitReport}
-              disabled={!reportReason || reportLoading}
+              disabled={!reportReason || reportLoading || (reportReason === "Other" && !otherReportReason.trim())}
             >
               {reportLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Submit
